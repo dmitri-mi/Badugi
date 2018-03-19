@@ -6,19 +6,19 @@ import java.util.*;
  */
 public interface PLBadugiPlayer
 {
-
+    
     /**
      * The method to inform the agent that a new heads-up match is starting.
      * @param handsToGo How many hands this tournament consists of.
      */
     default public void startNewMatch(int handsToGo) { }
-
+    
     /**
      * The method to inform the agent that the current heads-up match has ended.
      * @param finalScore The total number of chips accumulated by this player during the match.  
      */
     default public void finishedMatch(int finalScore) { }
-
+    
     /**
      * The method to inform the agent that a new hand is starting.
      * @param position 0 if the agent is the dealer in this hand, 1 if the opponent.
@@ -26,7 +26,7 @@ public interface PLBadugiPlayer
      * @param currentScore The current score of the tournament.
      */
     public void startNewHand(int position, int handsToGo, int currentScore);
-
+    
     /**
      * The method to ask the agent what betting action it wants to perform.
      * @param drawsRemaining How many draws are remaining after this betting round.
@@ -45,7 +45,7 @@ public interface PLBadugiPlayer
      */
     public int bettingAction(int drawsRemaining, PLBadugiHand hand, int pot, int raises, int toCall,
                              int minRaise, int maxRaise, int opponentDrew);
-
+    
     /**
      * The method to ask the agent which cards it wants to replace in this drawing round.
      * @param drawsRemaining How many draws are remaining, including this drawing round.
@@ -56,7 +56,7 @@ public interface PLBadugiPlayer
      * @return The list of cards in the hand that the agent wants to replace.
      */
     public List<Card> drawingAction(int drawsRemaining, PLBadugiHand hand, int pot, int dealerDrew);
-
+    
     /**
      * The method that gets called at the end of the current hand, whether fold or showdown.
      * @param yourHand The hand held by this agent.
@@ -64,13 +64,13 @@ public interface PLBadugiPlayer
      * @param result The win or the loss in chips for the player.
      */
     public void handComplete(PLBadugiHand yourHand, PLBadugiHand opponentHand, int result);
-
+ 
     /**
      * Returns the nickname of this agent.
      * @return The nickname of this agent.
      */
     public String getAgentName();
-
+    
     /**
      * Returns the author of this agent. The name should be given in the format "Last, First".
      * @return The author of this agent.

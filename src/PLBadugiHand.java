@@ -10,7 +10,7 @@ public class PLBadugiHand implements Comparable<PLBadugiHand> {
     private List<Card> allCards = new ArrayList<Card>(4);
     // The best badugi hand that can be constructed by choosing from the four cards.
     private List<Card> activeCards = new ArrayList<Card>(4);
-
+    
     /**
      * The constructor to create a hand from given list of cards.
      * @param cards The cards that make up this badugi hand.
@@ -19,7 +19,7 @@ public class PLBadugiHand implements Comparable<PLBadugiHand> {
         this.allCards.addAll(cards);
         updateActiveHand();
     }
-
+    
     public PLBadugiHand(String cards) {
         if(cards.length() != 8) {
             throw new IllegalArgumentException(cards + " does not consist of four cards");
@@ -29,7 +29,7 @@ public class PLBadugiHand implements Comparable<PLBadugiHand> {
         }
         updateActiveHand();
     }
-
+    
     // A private utility method to update the active hand.
     // Bug and fix found by Ilya Bakoulin Nov 6 2016
     private void updateActiveHand() {
@@ -41,7 +41,7 @@ public class PLBadugiHand implements Comparable<PLBadugiHand> {
         backtrack(0, new ArrayList<Card>(4), activeCards);
         Collections.sort(activeCards, comp);
     }
-
+    
     /**
      * The string representation of this hand.
      * @return The string representation of this hand.
@@ -53,7 +53,7 @@ public class PLBadugiHand implements Comparable<PLBadugiHand> {
         }
         return allCards.toString() + "(" + ranks + ")";
     }
-
+    
     /**
      * Get the list of all four cards in this hand.
      * @return An unmodifiable view to the four cards in this hand.
@@ -61,7 +61,7 @@ public class PLBadugiHand implements Comparable<PLBadugiHand> {
     public List<Card> getAllCards() {
         return Collections.unmodifiableList(allCards);
     }
-
+    
     /**
      * Get the list of the active badugi cards in this hand.
      * @return An unmodifiable view to the active badugi cards in this hand.
@@ -71,7 +71,7 @@ public class PLBadugiHand implements Comparable<PLBadugiHand> {
     public List<Card> getActiveCards() {
         return Collections.unmodifiableList(activeCards);
     }
-
+    
     /**
      * Get the list of cards in this hand that are not active in the badugi hand.
      * @return The list of the inactive badugi cards in this hand.
@@ -83,7 +83,7 @@ public class PLBadugiHand implements Comparable<PLBadugiHand> {
         }
         return inactiveCards;
     }
-
+    
     /**
      * Get an array of ranks of the active badugi cards in this hand, suitable for
      * the needs of the AI agents to evaluate the power of this hand.
@@ -95,7 +95,7 @@ public class PLBadugiHand implements Comparable<PLBadugiHand> {
         }
         return result;
     }
-
+    
     /**
      * The order comparison between the two badugi hands.
      * @param other The other badugi hand in this comparison
@@ -106,7 +106,7 @@ public class PLBadugiHand implements Comparable<PLBadugiHand> {
     public int compareTo(PLBadugiHand other) {
         return compare(this.activeCards, other.activeCards);
     }
-
+    
     /**
      * A utility function to compare two lists of active badugi cards.
      * @param c1 The first list of cards in this comparison.
@@ -125,7 +125,7 @@ public class PLBadugiHand implements Comparable<PLBadugiHand> {
         }
         return 0;
     }
-
+    
     /**
      * Replace one card from this hand with another card drawn from the given deck.
      * @param toReplace The card in this hand that is to be replaced with a drawn card.
@@ -137,14 +137,14 @@ public class PLBadugiHand implements Comparable<PLBadugiHand> {
         allCards.set(idx, deck.drawCard());
         updateActiveHand();
     }
-
+    
     // To find the best possible active badugi hand that can be made of this hand,
     // use backtracking to iterate through all 16 subsets, using the parameter
     // bestSoFar to store the best combination that we have found so far.
     private void backtrack(int idx, List<Card> buildHand, List<Card> bestSoFar) {
         // Base case of recursion
         if(idx == allCards.size()) {
-            if(compare(buildHand, bestSoFar) > 0) {
+            if(compare(buildHand, bestSoFar) > 0) {                
                 bestSoFar.clear(); bestSoFar.addAll(buildHand);
             }
             return;
