@@ -17,7 +17,7 @@ public class PLBadugiRunner {
     // Minimum raise in each betting round.
     private static final int[] MIN_RAISE = {4, 2, 2, 1};
     // Whether two agent objects of same type will play against each other in the tournament.
-    private static boolean SAME_TYPE_PLAY = true;
+    private static boolean SAME_TYPE_PLAY = false;
     // How many hands have been played so far in this entire tournament.
     private static long handCount = 0;
     
@@ -170,7 +170,6 @@ public class PLBadugiRunner {
     /**
      * Play the given number of hands of heads-up badugi between the two players, alternating the dealer position
      * between each round.
-     * @param rng The random number generator used to initialize the deck in each hand.
      * @param players The two players participating in this heads-up match.
      * @param out The PrintWriter used to write the verbose messages about the events in this hand. To silence this output,
      * use e.g. new FileWriter("/dev/null") as this argument in an Unix system.
@@ -287,10 +286,11 @@ public class PLBadugiRunner {
     public static void playThreeHandTournament() throws IOException {
         PLBadugiPlayer[] players = { 
             // Replace these with some suitable objects.
-            new IlkkaPlayer3(), new IlkkaPlayer3()
+                new PLBadugi500877176(),//new IlkkaPlayer3(),
+                new PLBadugi500877176()
         };
         Random rng;
-        String seed = "This string is to be used as seed of secure random number generator";
+        String seed = "This string is to be used as seed of secure random number generator"+System.currentTimeMillis();
         try { rng = new SecureRandom(seed.getBytes()); } 
         catch(Exception e) { 
             System.out.println("Unable to create a secure RNG. Using java.util.Random instead.");
@@ -305,15 +305,19 @@ public class PLBadugiRunner {
      * Run the entire badugi tournament between agents from classes listed inside this method.
      */
     public static void main(String[] args) throws IOException {
+        //playThreeHandTournament();
+
         /* Modify this array to include the player classes that participate in the tournament. */
 
+
         String[] playerClasses = {
-          "IlkkaPlayer3", "IlkkaPlayer3"
+          "IlkkaPlayer3", "PLBadugi500877176"
         };
         
         PrintWriter out = new PrintWriter(System.out);
         PrintWriter result = new PrintWriter(new FileWriter("results.txt"));
         badugiTournament(playerClasses, out, result);
         result.close();
+
     }   
 }
