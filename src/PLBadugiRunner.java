@@ -284,6 +284,8 @@ public class PLBadugiRunner {
      * Play three hands in the verbose mode. Suitable for watching your agents play.
      */
     public static void playThreeHandTournament() throws IOException {
+        SAME_TYPE_PLAY = true;
+
         PLBadugiPlayer[] players = { 
             // Replace these with some suitable objects.
                 new PLBadugi500877176(),//new IlkkaPlayer3(),
@@ -305,11 +307,13 @@ public class PLBadugiRunner {
      * Run the entire badugi tournament between agents from classes listed inside this method.
      */
     public static void main(String[] args) throws IOException {
-        //playThreeHandTournament();
+        playThreeHandTournament();
+    }
+    public static void main2(String[] args) throws IOException {
+
+        // playThreeHandTournament();
 
         /* Modify this array to include the player classes that participate in the tournament. */
-
-
         String[] playerClasses = {
           "IlkkaPlayer3", "PLBadugi500877176"
         };
@@ -318,6 +322,5 @@ public class PLBadugiRunner {
         PrintWriter result = new PrintWriter(new FileWriter("results.txt"));
         badugiTournament(playerClasses, out, result);
         result.close();
-
     }   
 }

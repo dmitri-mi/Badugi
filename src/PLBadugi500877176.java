@@ -1,5 +1,49 @@
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+
+class Qvalue{
+    public double value;
+    public int counter; // counter - number of times we got into this (state,action)
+    public Qvalue(double value, int counter){this.value=value; this.counter=counter;}
+}
+
+class Q{
+    // for each action a: 0,1,2,3,4 : 0=fold, 1=toCall, 2=minRaise, 3=(maxRaise+minRaise)/2, 4=maxRaise
+    private static int ActionLength = 5;
+    private Qvalue[] Qvalues;
+
+    public static final int FoldAction=0;
+    public static final int CallAction=1;
+    public static final int MinRaiseAction=2;
+    public static final int MiddleRaiseAction=3;
+    public static final int MaxRaiseAction=4;
+
+    public static void setActionValue(Q self, int actionIndex, double v) { // make it static in order to conserve memory
+
+        if (self.Qvalues == null) self.Qvalues = new Qvalue[ActionLength];
+
+        if (self.Qvalues[actionIndex] == null)
+            self.Qvalues[actionIndex] = new Qvalue(v, 0);
+
+        self.Qvalues[actionIndex].value = v;
+        self.Qvalues[actionIndex].counter++;
+    }
+}
+
+
+class Qtable{
+
+    private HashMap<Integer,Q> Qmap = new HashMap<Integer,Q>();
+    private double alpha = 0.1; // learning rate
+    private double gamma = 0.9; // discount factor
+
+    public void resetRate() {
+        // reset learning for new match
+        alpha = 0.1;
+        gamma = 0.9;
+    }
+}
 
 public class PLBadugi500877176 implements PLBadugiPlayer {
 
@@ -7,21 +51,20 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
     private String name = "Obi-Wan-";
     private int instaceIndex;
 
-    private double alpha = 0.1; // learning rate
-    private double gamma = 0.9; // discount factor
-
+    private Qtable qtable;
 
     public PLBadugi500877176() {
         instanceCounter++;
         name += instanceCounter;
         instaceIndex = instanceCounter;
+
+        qtable = new Qtable();
     }
 
     @Override
     public void startNewMatch(int handsToGo) {
-        // reset learning for new match
-        alpha = 0.1;
-        gamma = 0.9;
+
+        qtable.resetRate();
     }
 
     @Override
@@ -62,8 +105,9 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
         int[] active = hand.getActiveRanks();
         int activeCount = active.length; // [1,2,3,4]
         int activeFirstRank = active[0]; // from 1 (ace) to 13 (king)
-        
-        return instaceIndex==2 ?  toCall : minRaise;
+
+        return maxRaise;
+        // return instaceIndex==2 ?  toCall : minRaise;
     }
 
     @Override
