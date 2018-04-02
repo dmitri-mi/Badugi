@@ -178,6 +178,23 @@ class Vector {
             throw new IllegalArgumentException("vector length is incompatible");
         }
     }
+
+    public final double norm1(){
+        double sum = 0.0;
+        for (double v: this.weight) {
+            sum += Math.abs(v);
+        }
+        return sum;
+    }
+
+    public final double norm2(){
+        double sum = 0.0;
+        for (double v: this.weight) {
+            sum += v*v;
+        }
+        sum = Math.sqrt(sum);
+        return sum;
+    }
 }
 
 class Sarsa {
@@ -278,15 +295,15 @@ class Sarsa {
     private Vector getFeatures(State state, Action action) {
         double[] feature = new double[FeatureLength];
 
-        feature[0] = 1;
-        feature[1] = state.position + 1;
-        feature[3] = state.drawsRemaining;
-        feature[4] = state.raises;
-        feature[5] = state.opponentDrew;
-        feature[6] = state.agentDrew;
-        feature[7] = state.pot;
-        feature[8] = state.handActiveLength;
-        feature[9] = state.handActiveFirstRank;
+        feature[0] = 0.1;
+        feature[1] = (state.position - 0.5) / 10.0;
+        feature[3] = state.drawsRemaining / 10.0;
+        feature[4] = state.raises / 10.0;
+        feature[5] = state.opponentDrew / 20.0;
+        feature[6] = state.agentDrew / 20.0;
+        feature[7] = state.pot / 1e8;
+        feature[8] = state.handActiveLength / 10.0;
+        feature[9] = state.handActiveFirstRank / 20.0;
 
         return new Vector(feature);
     }
