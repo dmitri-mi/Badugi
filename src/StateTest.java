@@ -17,7 +17,7 @@ class StateTest {
 
     @Test
     void s1(){
-        State s1 = State.Encode(
+        Tabular.State s1 = Tabular.State.Encode(
 0,      //        int position, // 0 if the agent is the dealer, 1 - otherwise
 3,//        int drawsRemaining,  // 3,2,1,0
 0,//        int raises,          // 0,1,2,3,4
@@ -27,7 +27,7 @@ class StateTest {
 4//        int agentDrew     // -1,0,1,2,3,4
         );
 
-        DecodedState d = s1.Decode(s1);
+        Tabular.DecodedState d = s1.Decode(s1);
 
         assertEquals(0, d.position);
         assertEquals(3, d.drawsRemaining);
@@ -40,7 +40,7 @@ class StateTest {
 
     @Test
     void s2(){
-        State s1 = State.Encode(
+        Tabular.State s1 = Tabular.State.Encode(
                 1,      //        int position, // 0 if the agent is the dealer, 1 - otherwise
                 3,//        int drawsRemaining,  // 3,2,1,0
                 4,//        int raises,          // 0,1,2,3,4
@@ -50,7 +50,7 @@ class StateTest {
                 4//        int agentDrew     // -1,0,1,2,3,4
         );
 
-        DecodedState d = s1.Decode(s1);
+        Tabular.DecodedState d = s1.Decode(s1);
 
         assertEquals(1, d.position);
         assertEquals(3, d.drawsRemaining);

@@ -104,8 +104,8 @@ public class PLBadugiRunner {
                 }
                 if(action < toCall) { // current player folds, the hand is finished
                     message(out, players[otherPlayer].getAgentName() + " won " + totalBets[currPlayer] + " chips.");
-                    try { players[currPlayer].handComplete(hands[currPlayer], null, -totalBets[currPlayer]); } catch(Exception e) { }
-                    try { players[otherPlayer].handComplete(hands[otherPlayer], null, totalBets[currPlayer]); } catch(Exception e) { }
+                    try { players[currPlayer].handComplete(hands[currPlayer], null, -totalBets[currPlayer]); } catch(Exception e)  { message(out, players[currPlayer].getAgentName() + " handComplete method failed! " + e); }
+                    try { players[otherPlayer].handComplete(hands[otherPlayer], null, totalBets[currPlayer]); } catch(Exception e) { message(out, players[currPlayer].getAgentName() + " handComplete method failed! " + e); }
                     return totalBets[currPlayer] * (currPlayer == 1 ? +1 : -1);
                 }
                 else if(action == toCall) { // current player merely calls
@@ -156,13 +156,13 @@ public class PLBadugiRunner {
         int result = showdown < 0 ? -totalBets[0] : (showdown > 0 ? totalBets[1] : 0);
         if(showdown != 0) {
             message(out, players[showdown > 0 ? 0 : 1].getAgentName() +" won " + totalBets[1] + " chips.");
-            try { players[0].handComplete(hands[0], hands[1], showdown > 0 ? totalBets[0] : -totalBets[0]); } catch(Exception e) { }
-            try { players[1].handComplete(hands[1], hands[0], showdown < 0 ? totalBets[1] : -totalBets[1]); } catch(Exception e) { }
+            try { players[0].handComplete(hands[0], hands[1], showdown > 0 ? totalBets[0] : -totalBets[0]); } catch(Exception e) { message(out, players[0].getAgentName() + " handComplete method failed! " + e); }
+            try { players[1].handComplete(hands[1], hands[0], showdown < 0 ? totalBets[1] : -totalBets[1]); } catch(Exception e) { message(out, players[1].getAgentName() + " handComplete method failed! " + e); }
         }
         else {
             message(out, "Both players brought equal badugi hands to showdown.");
-            try { players[0].handComplete(hands[0], hands[1], 0); } catch(Exception e) { }    
-            try { players[1].handComplete(hands[1], hands[0], 0); } catch(Exception e) { }
+            try { players[0].handComplete(hands[0], hands[1], 0); } catch(Exception e) { message(out, players[0].getAgentName() + " handComplete method failed! " + e); }
+            try { players[1].handComplete(hands[1], hands[0], 0); } catch(Exception e) { message(out, players[1].getAgentName() + " handComplete method failed! " + e); }
         }
         return result;
     }

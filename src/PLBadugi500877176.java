@@ -1,21 +1,20 @@
 import java.security.SecureRandom;
-import java.util.Arrays;
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
 enum Action{
-    Fold(Qaction.FoldAction),
-    Call(Qaction.CallAction),
-    MinRaise(Qaction.MinRaiseAction),
-    MiddleRaise(Qaction.MiddleRaiseAction),
-    MaxRaise(Qaction.MaxRaiseAction),
+    Fold(ActionHelper.FoldAction),
+    Call(ActionHelper.CallAction),
+    MinRaise(ActionHelper.MinRaiseAction),
+    MiddleRaise(ActionHelper.MiddleRaiseAction),
+    MaxRaise(ActionHelper.MaxRaiseAction),
 
-    DrawZero(Qaction.DrawZeroAction),
-    DrawOne(Qaction.DrawOneAction),
-    DrawTwo(Qaction.DrawTwoAction),
-    DrawThree(Qaction.DrawThreeAction),
-    DrawFour(Qaction.DrawFourAction);
+    DrawZero(ActionHelper.DrawZeroAction),
+    DrawOne(ActionHelper.DrawOneAction),
+    DrawTwo(ActionHelper.DrawTwoAction),
+    DrawThree(ActionHelper.DrawThreeAction),
+    DrawFour(ActionHelper.DrawFourAction);
 
     private int index;
 
@@ -26,208 +25,66 @@ enum Action{
 
     public final int toInt(){return index;}
 
-    public static final Action fromInt(int index){
-        if(index == Qaction.FoldAction) return Fold;
-        if(index == Qaction.CallAction) return Call;
-        if(index == Qaction.MinRaiseAction) return MinRaise;
-        if(index == Qaction.MiddleRaiseAction) return MiddleRaise;
-        if(index == Qaction.MaxRaiseAction) return MaxRaise;
+    public static Action fromInt(int index){
+        if(index == ActionHelper.FoldAction) return Fold;
+        if(index == ActionHelper.CallAction) return Call;
+        if(index == ActionHelper.MinRaiseAction) return MinRaise;
+        if(index == ActionHelper.MiddleRaiseAction) return MiddleRaise;
+        if(index == ActionHelper.MaxRaiseAction) return MaxRaise;
 
-        if(index == Qaction.DrawZeroAction ) return DrawZero;
-        if(index == Qaction.DrawOneAction  ) return DrawOne;
-        if(index == Qaction.DrawTwoAction  ) return DrawTwo;
-        if(index == Qaction.DrawThreeAction) return DrawThree;
-        if(index == Qaction.DrawFourAction ) return DrawFour;
+        if(index == ActionHelper.DrawZeroAction ) return DrawZero;
+        if(index == ActionHelper.DrawOneAction  ) return DrawOne;
+        if(index == ActionHelper.DrawTwoAction  ) return DrawTwo;
+        if(index == ActionHelper.DrawThreeAction) return DrawThree;
+        if(index == ActionHelper.DrawFourAction ) return DrawFour;
 
         throw new IllegalArgumentException("Enum Action cannot be created from integer: "+index);
     }
 
     public final boolean isBet() {
-        return index <= Qaction.MaxRaiseAction;
+        return index <= ActionHelper.MaxRaiseAction;
+    }
+
+    public static List<Action> allActions(boolean isBet) {
+
+        List<Action> selectedActions = new ArrayList<>();
+        Action[] all = Action.values();
+
+        if(isBet) { for(Action a : all) {if( a.isBet()) selectedActions.add(a);}}
+        else      { for(Action a : all) {if(!a.isBet()) selectedActions.add(a);}}
+
+        return selectedActions;
+    }
+
+    // list that has Q-value for each action of the given state.
+// action a: 0,1,2,3,4 : 0=fold, 1=toCall, 2=minRaise, 3=(maxRaise+minRaise)/2, 4=maxRaise
+//           5,6,7,8,9 : 5=draw-0,6=draw-1,7=draw-2,8=draw-3,9=draw-4
+    class ActionHelper {
+        // action index:
+        public static final int FoldAction=0;
+        public static final int CallAction=1;
+        public static final int MinRaiseAction=2;
+        public static final int MiddleRaiseAction=3;
+        public static final int MaxRaiseAction=4;
+
+        public static final int DrawZeroAction=5;
+        public static final int DrawOneAction=6;
+        public static final int DrawTwoAction=7;
+        public static final int DrawThreeAction=8;
+        public static final int DrawFourAction=9;
     }
 }
 
-class Qvalue {
-    private double value;
-    private int counter; // counter - number of times we got into this (state,action)
-    public Qvalue(double value, int counter){this.value=value; this.counter=counter;}
-    public final void setValue(double v){value = v;}
-    public final double getValue(){return value;}
-    public final int getCounter(){return counter;}
-    public final void incrementCounter(){counter++;}
-}
-
-/*
- list that has Q-value for each action of the given state.
- action a: 0,1,2,3,4 : 0=fold, 1=toCall, 2=minRaise, 3=(maxRaise+minRaise)/2, 4=maxRaise
- */
-class Qaction {
-    private Qvalue[] qValues;
-
-    // for each action a: 0,1,2,3,4 : 0=fold, 1=toCall, 2=minRaise, 3=(maxRaise+minRaise)/2, 4=maxRaise
-    private static final int ActionLength = 5+5;
-
-    // action index:
-    public static final int FoldAction=0;
-    public static final int CallAction=1;
-    public static final int MinRaiseAction=2;
-    public static final int MiddleRaiseAction=3;
-    public static final int MaxRaiseAction=4;
-
-    public static final int DrawZeroAction=5;
-    public static final int DrawOneAction=6;
-    public static final int DrawTwoAction=7;
-    public static final int DrawThreeAction=8;
-    public static final int DrawFourAction=9;
-
-    public Qaction(){
-        if (qValues == null) {
-            qValues = new Qvalue[ActionLength];
-
-            for (int i=0; i< ActionLength; i++){
-                qValues[i] = new Qvalue(0,0);
-            }
-        }
-    }
-
-    public final void setActionValue(Action action, double v) {
-        Qvalue qvalue = qValues[action.toInt()];
-        qvalue.setValue(v);
-        qvalue.incrementCounter();
-    }
-
-    public final double getActionValue(Action action){
-        return qValues[action.toInt()].getValue();
-    }
-
-    public final int getActionCounter(Action action){
-        return qValues[action.toInt()].getCounter();
-    }
-
-    public final MaxValue getMaxBetActionValue(){
-        return getMaxActionValue(FoldAction, MaxRaiseAction);
-    }
-
-    public final MaxValue getMaxDrawActionValue(){
-        return getMaxActionValue(DrawZeroAction, DrawFourAction);
-    }
-
-    private final MaxValue getMaxActionValue(int startIndex, int endIndex){
-        double max = qValues[startIndex].getValue();
-        int bestActionIndex = startIndex;
-
-        for(int i=startIndex; i<=endIndex; i++) {
-            Qvalue q = this.qValues[i];
-            double otherActionValue = q.getValue();
-            if (max < otherActionValue) {
-                max = otherActionValue;
-                bestActionIndex = i;
-            }
-        }
-
-        return new MaxValue(Action.fromInt(bestActionIndex), max);
-    }
-}
-
-class MaxValue {
-    public Action action;
-    public double value;
-    public MaxValue(Action action, double value){
-        this.action=action;
-        this.value=value;
-    }
-}
-
-class State implements Comparable<State>{
-
-//    int position; // 0 if the agent is the dealer in this hand, 1 if the opponent.
-//    int drawsRemaining;  // 3,2,1,0
-//    int raises;          // 0,1,2,3,4
-//    int handActiveLength;// 1,2,3,4
-//    int handActiveFirstRank; // 1,2,..,13
-//    int opponentDrew;        // -1 , 0,1,2,3,4
-//    int agentDrew;      // -1,0,1,2,3,4
-//    //int potSize; //pot 2..32*10^6 => int[log10(pot)]
-
-    int encoded;
-
-    private State(int encoded){this.encoded = encoded;}
-
-    @Override
-    public int compareTo(State o) {
-        if(o==null)return 1;
-        return Integer.compare(encoded, o.encoded);
-    }
-    
-    public static State Encode(
-            int position,            // 0 if the agent is the dealer, 1 - otherwise
-            int drawsRemaining,      // 3,2,1,0
-            int raises,              // 0,1,2,3,4
-            int handActiveLength,    // 1,2,3,4        => every value is subtracted by 1
-            int handActiveFirstRank, // 1,2,..,13      => every value is subtracted by 1
-            int opponentDrew,        // -1,0,1,2,3,4 => -1 is converted to 0
-            int agentDrew           // -1,0,1,2,3,4   => -1 is converted to 0
-    )
-    {
-        if(position != 0 && position != 1) throw new IllegalArgumentException("position: "+position);
-        if(drawsRemaining > 3 || drawsRemaining < 0) throw new IllegalArgumentException("drawsRemaining: "+drawsRemaining);
-        if(raises > 4 || raises < 0) throw new IllegalArgumentException("raises: "+raises);
-        if(handActiveLength > 4 || handActiveLength < 1)
-            throw new IllegalArgumentException("handActiveLength: " + handActiveLength);
-        if(handActiveFirstRank > 13 || handActiveFirstRank < 1)
-            throw new IllegalArgumentException("handActiveFirstRank: "+handActiveFirstRank);
-
-        if(opponentDrew > 4) opponentDrew = 4; // clip max
-        if(opponentDrew < -1)
-            throw new IllegalArgumentException("opponentDrew: "+opponentDrew);
-
-        if(agentDrew > 4) agentDrew =4; // clip max
-        if(agentDrew > 4 || agentDrew < -1)
-            throw new IllegalArgumentException("agentDrew: "+ agentDrew);
-
-        int res = 0;
-
-        int shift = 0;
-        res |= (position & 0b1); shift=shift+1;
-        res |= (drawsRemaining & 0b11)<<shift; shift=shift+2;
-        res |= (raises & 0b111)<<shift; shift = shift+3;
-        res |= ((handActiveLength-1) & 0b11)<<shift; shift = shift + 2;
-        res |= ((handActiveFirstRank-1) & 0b1111 )<<shift; shift = shift + 4;
-
-        if(opponentDrew == -1) opponentDrew = 0;
-        res |= (opponentDrew & 0b111)<<shift; shift = shift + 3;
-
-        if(agentDrew == -1) agentDrew = 0;
-        res |= (agentDrew & 0b111)<<shift; shift = shift + 3;
-
-        return new State(res);
-    }
-
-    public static DecodedState Decode(State s){
-        DecodedState d = new DecodedState();
-
-        int encoded  = s.encoded;
-
-        d.position = encoded & 0b1; encoded = encoded>>1;
-        d.drawsRemaining = encoded & 0b11; encoded = encoded>>2;
-        d.raises = encoded & 0b111; encoded = encoded>>3;
-        d.handActiveLength = encoded & 0b11; encoded = encoded>>2;
-        d.handActiveFirstRank = encoded & 0b1111; encoded = encoded>>4;
-        d.opponentDrew = encoded & 0b111; encoded = encoded>>3;
-        d.agentDrew = encoded & 0b111; encoded = encoded >> 3;
-
-        return d;
-    }
-}
-
-class DecodedState{
+class State{
     int position;// 0 if the agent is the dealer or 1 - otherwise
     int drawsRemaining; // 3,2,1,0
-    int raises;         // 0,1,2,3,4            
-    int handActiveLength; // 1,2,3,4
-    int handActiveFirstRank; // 1,2,..,13
+    int raises;         // 0,1,2,3,4
     int opponentDrew;       // -1,0,1,2,3,4
     int agentDrew;    // -1,0,1,2,3,4
+    int pot; // 2..3*10^6
+
+    int handActiveLength; // 1,2,3,4
+    int handActiveFirstRank; // 1,2,..,13
 }
 
 class RandomHelper{
@@ -256,58 +113,174 @@ class RandomHelper{
         Action action = Action.fromInt(index);
         return action;
     }
-}
 
-class Qtable{
-
-    private HashMap<State, Qaction> Qmap = new HashMap<State, Qaction>();
-    private double alpha = 0.1; // learning rate
-    private double gamma = 0.9; // discount factor
-
-    public Qtable(){
-        resetRate();
+    public static final boolean nextActionShouldBeRandom(double epsilon){
+        double d = random.nextDouble(); // next random double from interval [0..1]
+        if(d<=epsilon) return true; // make epsilon greedy only epsilon amount of time
+        return false; // otherwise use regular algorithm for action
     }
 
-    public void resetRate() {
+    public static Action getRandomAction(boolean isBet) {
+        if(isBet) return getRandomBetAction();
+        return getRandomDrawAction();
+    }
+}
+
+class Vector {
+    private double[] weight;
+
+    public Vector(int length){
+        weight = new double[length];
+
+        for (int i=0; i<length; i++){
+            weight[i]=0.0;
+        }
+    }
+
+    public Vector(double[] values){
+        if (values==null){
+            throw new IllegalArgumentException("vector length is incompatible");
+        }
+
+        weight = new double[values.length];
+
+        for (int i=0; i<weight.length; i++){
+            weight[i]=values[i];
+        }
+    }
+
+    public void add(final Vector other){
+        validate(other);
+
+        for (int i=0; i<weight.length; i++){
+            weight[i] += other.weight[i];
+        }
+    }
+
+    public void multiply(double scalar){
+        for (int i=0; i<weight.length; i++){
+            weight[i] *= scalar;
+        }
+    }
+
+    public double innerProduct(Vector other){
+        validate(other);
+
+        double sum = 0.0;
+        for (int i=0; i<weight.length; i++){
+            sum += weight[i] * other.weight[i];
+        }
+        return sum;
+    }
+
+    private final void validate(Vector other){
+        if(other == null || other.weight.length != this.weight.length) {
+            throw new IllegalArgumentException("vector length is incompatible");
+        }
+    }
+}
+
+class Sarsa {
+
+    private double alpha; // learning rate
+    private double gamma; // discount factor
+    private double epsilon; // epsilon greedy parameter for exploration vs exploitation
+    private int handsToGo;
+    private int episodeCounter; // counts number of episodes done => used for changing hyper-parameters
+
+    private State prevState;   // the previous state of Q-value: S
+    private Action prevAction; // the action that was taken to go from prevState to newState: A
+    private Vector theta; // value function weights vector for features
+    private static final int FeatureLength = 10;
+
+    public final State getPrevState(){ return prevState;}
+    public final void setPrevState(State s){ prevState = s;}
+    public final Action getPrevAction(){ return prevAction;}
+    public final void setPrevAction(Action action){ prevAction = action;}
+
+    public Sarsa(){
+        resetRate();
+        theta = new Vector(FeatureLength);
+    }
+
+    private final void resetRate() {
         // reset learning for new match
         alpha = 0.3;
         gamma = 0.99;
+        epsilon = 0.3;
+        episodeCounter = 0;
     }
 
-    public Action bestAction(State currentState, boolean isBet){
-        Qaction q = Qmap.getOrDefault(currentState,null);
-
-        if(q == null){
-            Action a = isBet ? RandomHelper.getRandomBetAction(): RandomHelper.getRandomDrawAction();
-            return a;
-        }
-        else{
-            return isBet ? q.getMaxBetActionValue().action : q.getMaxDrawActionValue().action;
-        }
+    public final void startEpisode(State initialState, int episodesLeft) {
+        episodeCounter++;
+        this.handsToGo = episodesLeft;
+        prevState = initialState;
+        prevAction = RandomHelper.getRandomBetAction();
+        epsilon /= episodeCounter;
+        alpha *= 0.9;
     }
 
-    public void update(State prevState, State newState, double reward, Action action){
-        Qaction q = Qmap.getOrDefault(prevState, null);
+    public final Action nextAction(State newState, boolean isBet){
 
-        double prevQ = 0.0;
-        if(q==null){
-            q = new Qaction();
-            Qmap.put(prevState, q);
-        }
-        else{
-            prevQ = q.getActionValue(action);
+        // Q(S,A,T) = sum( Ti * Fi ), Fi = Qi(S,A) - feature i,
+        // action = e-greedy argmax( Q(S,A,T), S=newState )
+
+        if(RandomHelper.nextActionShouldBeRandom(epsilon)){
+            return RandomHelper.getRandomAction(isBet);
         }
 
-        double maxQ = 0.0;// max Q(s-tag, action) , for all action
-        Qaction qNew = Qmap.getOrDefault(newState,null);
-        if(qNew != null) {
-            MaxValue maxValue = action.isBet() ? q.getMaxBetActionValue() : q.getMaxDrawActionValue();
-            maxQ = maxValue.value;
+        Action bestAction = null;
+        double max = Double.NEGATIVE_INFINITY;
+
+        for(Action action: Action.allActions(isBet)) {
+
+            double q = q(newState, action, theta);
+
+            if (q > max) {
+                max = q;
+                bestAction = action;
+            }
         }
 
-        double newReward = (1-alpha) * prevQ + alpha * (reward + gamma * maxQ);
+        return bestAction;
+    }
 
-        q.setActionValue(action, newReward);
+    public final void update(State newState, double reward, Action newAction){
+
+        double scalar = alpha * (reward + gamma * q(newState,newAction,theta) - q(prevState,prevAction,theta));
+        Vector gradient = getFeatures(prevState, prevAction);
+        gradient.multiply(scalar);
+        theta.add(gradient);
+    }
+
+    public final void updateTerminal(double reward) {
+
+        double scalar = alpha * (reward - q(prevState,prevAction,theta));
+        Vector gradient = getFeatures(prevState, prevAction);
+        gradient.multiply(scalar);
+        theta.add(gradient);
+    }
+
+    private double q(State state, Action action, Vector theta) {
+        Vector v = getFeatures(state, action);
+        double s = v.innerProduct(theta);
+        return s;
+    }
+
+    private Vector getFeatures(State state, Action action) {
+        double[] feature = new double[FeatureLength];
+
+        feature[0] = 1;
+        feature[1] = state.position;
+        feature[3] = state.drawsRemaining;
+        feature[4] = state.raises;
+        feature[5] = state.opponentDrew;
+        feature[6] = state.agentDrew;
+        feature[7] = state.pot;
+        feature[8] = state.handActiveLength;
+        feature[9] = state.handActiveFirstRank;
+
+        return new Vector(feature);
     }
 }
 
@@ -316,29 +289,18 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
     private static int instanceCounter = 0;
     private String name = "Obi-Wan-";
 
-    private int handsToGo;
-    private int position;
-    private int drawsRemaining;
-    private int raises;
-    private int opponentDrew;
-    private int agentDrew;
-    private State prevState; // the previous state of Q-value: s
-    private Action prevAction; // the action that was taken to go from prevState to newState
-    private Qtable qtable;
+    private Sarsa qtable;
+    private State newState;
 
     public PLBadugi500877176() {
         instanceCounter++;
         name += instanceCounter;
 
-        qtable = new Qtable();
+        qtable = new Sarsa();
     }
 
     @Override
-    public void startNewMatch(int handsToGo) {
-
-        this.handsToGo = handsToGo;
-        qtable.resetRate();
-    }
+    public void startNewMatch(int handsToGo) { }
 
     @Override
     public void finishedMatch(int finalScore) { }
@@ -352,33 +314,42 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
     @Override
     public void startNewHand(int position, int handsToGo, int currentScore) {
 
-        this.position = position;
-        this.handsToGo = handsToGo;
-        this.prevAction = RandomHelper.getRandomBetAction();
-        this.opponentDrew = 0;
-        this.agentDrew = 0;
-        this.raises = 0;
-        this.drawsRemaining = 3;
-        // int myScore = position==0 ?  currentScore : -currentScore;
-
-        prevState = encodeToState(new PLBadugiHand(Arrays.asList(new Card(0,12))));
+        State s = getInitialState(position);
+        qtable.startEpisode(s, handsToGo);
     }
 
-    private final State encodeToState(PLBadugiHand hand){
+    private final State getInitialState(int position){
+        State s = new State();
 
-        int[] active = hand.getActiveRanks();
-        int handActiveLength = active.length; // [1,2,3,4]
-        int handActiveFirstRank = active[0]; // from 1 (ace) to 13 (king)
+        s.position = position;
+        s.opponentDrew = 0;
+        s.agentDrew = 0;
+        s.raises = 0;
+        s.drawsRemaining = 3;
+        s.pot = 0;
+        s.handActiveLength = 0;
+        s.handActiveFirstRank = 13;
 
-        return State.Encode(
-                position,
-                drawsRemaining,
-                raises,
-                handActiveLength,
-                handActiveFirstRank,
-                opponentDrew,
-                agentDrew
-        );
+        return s;
+
+        // new PLBadugiHand(Arrays.asList(new Card(0,12))));
+        // int myScore = position==0 ?  currentScore : -currentScore;
+    }
+
+    private final void prepareUpdate(State newState){
+        this.newState = newState;
+    }
+
+    private final void applyUpdate(boolean isBet){
+        // when episode (hand) starts there is no newState
+        if(newState == null) return;
+
+        Action nextAction = qtable.nextAction(newState, isBet);
+
+        qtable.update(newState,0.0, nextAction);
+
+        qtable.setPrevState(newState);
+        qtable.setPrevAction(nextAction);
     }
 
     /**
@@ -401,25 +372,29 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
     public int bettingAction(int drawsRemaining, PLBadugiHand hand, int pot, int raises,
                              int toCall, int minRaise, int maxRaise, int opponentDrew) {
 
-        this.drawsRemaining = drawsRemaining;
-        this.raises = raises;
-        this.opponentDrew = opponentDrew;
+        applyUpdate(true);
+
+        Action prevAction = qtable.getPrevAction();
+        int chips = convertToChips(prevAction, toCall,  minRaise,  maxRaise);;
 
         int[] active = hand.getActiveRanks();
         int handActiveLength = active.length; // [1,2,3,4]
         int handActiveFirstRank = active[0]; // from 1 (ace) to 13 (king)
 
-        State newState = encodeToState(hand);
+        State newState = new State();
 
-        qtable.update(prevState, newState,0.0, prevAction);
+        newState.position = qtable.getPrevState().position;
+        newState.opponentDrew = opponentDrew == -1 ? 0 : opponentDrew;
+        newState.agentDrew = qtable.getPrevState().agentDrew;
+        newState.raises = raises;
+        newState.drawsRemaining = drawsRemaining;
+        newState.pot = pot;
+        newState.handActiveLength = handActiveLength;
+        newState.handActiveFirstRank = handActiveFirstRank;
 
-        Action bestAction = qtable.bestAction(newState, true);
-        this.prevAction = bestAction;
-        this.prevState = newState;
+        prepareUpdate(newState);
 
-        return convertToChips(bestAction, toCall,  minRaise,  maxRaise);
-
-        // return instaceIndex==2 ?  toCall : minRaise;
+        return chips;
     }
 
     private int convertToChips(Action action, int toCall, int minRaise, int maxRaise) {
@@ -437,23 +412,28 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
 
     @Override
     public List<Card> drawingAction(int drawsRemaining, PLBadugiHand hand, int pot, int dealerDrew) {
-        this.drawsRemaining = drawsRemaining;
 
-        if(dealerDrew != -1){
-            this.opponentDrew = dealerDrew;
-        }
+        applyUpdate(false);
 
-        State newState = encodeToState(hand);
+        Action prevAction = qtable.getPrevAction();
+        List<Card> replaceCards = convertToDraw(prevAction, hand);
 
-        qtable.update(prevState, newState,0.0, prevAction);
+        int[] active = hand.getActiveRanks();
+        int handActiveLength = active.length; // [1,2,3,4]
+        int handActiveFirstRank = active[0]; // from 1 (ace) to 13 (king)
 
-        Action bestAction = qtable.bestAction(newState, false);
+        State newState = new State();
 
-        List<Card> replaceCards = convertToDraw(bestAction, hand);
+        newState.position = qtable.getPrevState().position;
+        newState.opponentDrew = dealerDrew != -1 ? dealerDrew : qtable.getPrevState().opponentDrew;
+        newState.agentDrew = qtable.getPrevState().agentDrew + replaceCards.size();
+        newState.raises = qtable.getPrevState().raises;
+        newState.drawsRemaining = drawsRemaining;
+        newState.pot = pot;
+        newState.handActiveLength = handActiveLength;
+        newState.handActiveFirstRank = handActiveFirstRank;
 
-        this.agentDrew += replaceCards.size();
-        this.prevState = newState;
-        this.prevAction = bestAction;
+        prepareUpdate(newState);
 
         return replaceCards;
     }
@@ -464,7 +444,9 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
         int countInactive = inactiveCards.size();
         int cardsToDraw = action.toInt() - Action.DrawZero.toInt();
 
-        if(cardsToDraw < 0 || cardsToDraw > 4) throw new IllegalArgumentException("No support for draw action: "+action);
+        if(cardsToDraw < 0 || cardsToDraw > 4) {
+            throw new IllegalArgumentException("No support for draw action: "+action);
+        }
 
         int count = Math.min(cardsToDraw, countInactive); // limit the number of cards to draw by count of inactive
         return inactiveCards.subList(0, count);
@@ -473,23 +455,7 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
     @Override
     public void handComplete(PLBadugiHand yourHand, PLBadugiHand opponentHand, int result) {
 
-        int[] active = yourHand.getActiveRanks();
-        int handActiveLength = active.length; // [1,2,3,4]
-        int handActiveFirstRank = active[0]; // from 1 (ace) to 13 (king)
-
-        State newState = State.Encode(
-                this.position,
-                this.drawsRemaining,
-                this.raises,
-                handActiveLength,
-                handActiveFirstRank,
-                this.opponentDrew,
-                this.agentDrew
-        );
-
-        qtable.update(prevState, newState, result, prevAction);
-
-        this.prevState = newState; // don't need this at the end of the hand ?
+        qtable.updateTerminal(result);
     }
 
     @Override
