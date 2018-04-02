@@ -185,6 +185,7 @@ class Sarsa {
     private double alpha; // learning rate
     private double gamma; // discount factor
     private double epsilon; // epsilon greedy parameter for exploration vs exploitation
+    private double epsilonZero; // starting value of epsilon
     private int handsToGo;
     private int episodeCounter; // counts number of episodes done => used for changing hyper-parameters
 
@@ -207,7 +208,7 @@ class Sarsa {
         // reset learning for new match
         alpha = 0.3;
         gamma = 0.99;
-        epsilon = 0.3;
+        epsilon = epsilonZero = 0.3;
         episodeCounter = 0;
     }
 
@@ -216,8 +217,8 @@ class Sarsa {
         this.handsToGo = episodesLeft;
         prevState = initialState;
         prevAction = RandomHelper.getRandomBetAction();
-        epsilon /= episodeCounter;
-        alpha *= 0.9;
+        epsilon = epsilonZero;// * episodesLeft/(10*(episodeCounter+episodesLeft));
+        //alpha *= 0.9;
     }
 
     public final Action nextAction(State newState, boolean isBet){
@@ -231,10 +232,17 @@ class Sarsa {
 
         Action bestAction = null;
         double max = Double.NEGATIVE_INFINITY;
+        boolean isFirst = true;
 
         for(Action action: Action.allActions(isBet)) {
 
             double q = q(newState, action, theta);
+
+            if(isFirst){
+                isFirst = false;
+                max = q;
+                bestAction = action;
+            }
 
             if (q > max) {
                 max = q;
@@ -271,7 +279,7 @@ class Sarsa {
         double[] feature = new double[FeatureLength];
 
         feature[0] = 1;
-        feature[1] = state.position;
+        feature[1] = state.position + 1;
         feature[3] = state.drawsRemaining;
         feature[4] = state.raises;
         feature[5] = state.opponentDrew;

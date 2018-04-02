@@ -306,10 +306,10 @@ public class PLBadugiRunner {
     /**
      * Run the entire badugi tournament between agents from classes listed inside this method.
      */
-    public static void main(String[] args) throws IOException {
+    public static void main2(String[] args) throws IOException {
         playThreeHandTournament();
     }
-    public static void main2(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException {
 
         // playThreeHandTournament();
 
