@@ -234,8 +234,8 @@ class Sarsa {
         this.handsToGo = episodesLeft;
         prevState = initialState;
         prevAction = RandomHelper.getRandomBetAction();
-        epsilon = epsilonZero;// * episodesLeft/(10*(episodeCounter+episodesLeft));
-        //alpha *= 0.9;
+        epsilon *= 0.99993;// * episodesLeft/(10*(episodeCounter+episodesLeft));
+        alpha *= 0.99993; // 10^(-3/10^5), so that after 10^5 episodes alpha will be divided by 10^-3
     }
 
     public final Action nextAction(State newState, boolean isBet){
@@ -339,6 +339,7 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
     @Override
     public void startNewHand(int position, int handsToGo, int currentScore) {
 
+        newState = null;
         State s = getInitialState(position);
         qtable.startEpisode(s, handsToGo);
     }
@@ -406,11 +407,12 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
         int handActiveLength = active.length; // [1,2,3,4]
         int handActiveFirstRank = active[0]; // from 1 (ace) to 13 (king)
 
-        State newState = new State();
+        final State prevState = qtable.getPrevState();
 
-        newState.position = qtable.getPrevState().position;
-        newState.opponentDrew = opponentDrew == -1 ? 0 : opponentDrew;
-        newState.agentDrew = qtable.getPrevState().agentDrew;
+        State newState = new State();
+        newState.position = prevState.position;
+        newState.opponentDrew = prevState.opponentDrew + (opponentDrew == -1 ? 0: opponentDrew);
+        newState.agentDrew = prevState.agentDrew;
         newState.raises = raises;
         newState.drawsRemaining = drawsRemaining;
         newState.pot = pot;
@@ -447,12 +449,13 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
         int handActiveLength = active.length; // [1,2,3,4]
         int handActiveFirstRank = active[0]; // from 1 (ace) to 13 (king)
 
-        State newState = new State();
+        final State prevState = qtable.getPrevState();
 
-        newState.position = qtable.getPrevState().position;
-        newState.opponentDrew = dealerDrew != -1 ? dealerDrew : qtable.getPrevState().opponentDrew;
-        newState.agentDrew = qtable.getPrevState().agentDrew + replaceCards.size();
-        newState.raises = qtable.getPrevState().raises;
+        State newState = new State();
+        newState.position = prevState.position;
+        newState.opponentDrew = prevState.opponentDrew + (dealerDrew == -1 ? 0: dealerDrew);
+        newState.agentDrew = prevState.agentDrew + replaceCards.size();
+        newState.raises = prevState.raises;
         newState.drawsRemaining = drawsRemaining;
         newState.pot = pot;
         newState.handActiveLength = handActiveLength;
