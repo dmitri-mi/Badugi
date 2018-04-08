@@ -1,8 +1,11 @@
 // VERSION MARCH 6, 2018
 
+import easyjcckit.QuickPlot;
+
 import java.util.*;
 import java.io.*;
 import java.security.*;
+import static easyjcckit.QuickPlot.*;
 
 public class PLBadugiRunner {
 
@@ -182,22 +185,54 @@ public class PLBadugiRunner {
         PLBadugiPlayer[] thisRoundPlayers = new PLBadugiPlayer[2];
         players[0].startNewMatch(hands);
         players[1].startNewMatch(hands);
+
+        int[] scoresPerMatch = new int[hands];
+        int handsInMatch = 0;
+
         while(--hands >= 0) {
             if(hands % 2 == 0) { thisRoundPlayers[0] = players[0]; thisRoundPlayers[1] = players[1]; }
             else { thisRoundPlayers[0] = players[1]; thisRoundPlayers[1] = players[0]; }
             int sign = (hands % 2 == 0 ? +1 : -1);
             handCount++;
-            if(SAMPLE_OUTPUT > 0 && handCount % SAMPLE_OUTPUT == 0 && out == null) { 
-                score += sign * playOneHand(4, deck, thisRoundPlayers, new PrintWriter(System.out), hands, sign * score);
+
+            PrintWriter out2=null;
+            if(SAMPLE_OUTPUT > 0 && handCount % SAMPLE_OUTPUT == 0 && out == null) {
+                out2 = new PrintWriter(System.out);
             }
-            else {
-                score += sign * playOneHand(4, deck, thisRoundPlayers, out, hands, sign * score);
-            }
+
+            int matchScore = sign * playOneHand(4, deck, thisRoundPlayers, out2, hands, sign * score);
+
+            score += matchScore; // total score
+
+            scoresPerMatch[handsInMatch++] = matchScore; // current match score
         }
         players[0].finishedMatch(score);
         players[1].finishedMatch(-score);
+
+        showProgress(scoresPerMatch);
         return score;
-    }    
+    }
+
+    public static void showProgress(int[] scores) {
+
+        final int N = 100; // length of running average
+        final int Shift = 100;
+
+        int newLen = (scores.length - N + 1) / Shift;
+        double[] xaxis = new double[newLen];
+        double[] yaxis = new double[newLen];
+        for (int i = N - 1, k=0; i < 100000 /*scores.length*/ && k<xaxis.length; i = i + Shift, k++) {
+            xaxis[k] = i;
+
+            double sum = 0.0;
+            for (int j = i - N + 1; j <= i; j++) {
+                sum += scores[j];
+            }
+            yaxis[k] = sum / N;
+        }
+
+        plot( xaxis, yaxis ); // create a plot using xaxis and yvalues
+    }
     
     /**
      * Play the entire multiagent Badugi tournament, one heads-up match between every possible pair of agents.
@@ -321,6 +356,9 @@ public class PLBadugiRunner {
         PrintWriter out = new PrintWriter(System.out);
         PrintWriter result = new PrintWriter(new FileWriter("results.txt"));
         badugiTournament(playerClasses, out, result);
+
         result.close();
+
+
     }   
 }
