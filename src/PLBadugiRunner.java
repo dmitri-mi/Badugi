@@ -186,7 +186,11 @@ public class PLBadugiRunner {
         players[0].startNewMatch(hands);
         players[1].startNewMatch(hands);
 
+        PLBadugi500877176 me = players[0] instanceof PLBadugi500877176 ? (PLBadugi500877176) players[0] : null;
+        if(me==null) me = players[1] instanceof PLBadugi500877176 ? (PLBadugi500877176) players[1] : null;
+
         int[] scoresPerMatch = new int[hands];
+        double[] thetaPerMatch = new double[hands];
         int handsInMatch = 0;
 
         while(--hands >= 0) {
@@ -204,34 +208,47 @@ public class PLBadugiRunner {
 
             score += matchScore; // total score
 
-            scoresPerMatch[handsInMatch++] = matchScore; // current match score
+            scoresPerMatch[handsInMatch] = matchScore; // current match score
+            thetaPerMatch[handsInMatch] = me!=null ? me.thetaNorm() : 0.0;
+            handsInMatch++;
         }
         players[0].finishedMatch(score);
         players[1].finishedMatch(-score);
 
-        showProgress(scoresPerMatch);
+        showProgress(scoresPerMatch, thetaPerMatch);
         return score;
     }
 
-    public static void showProgress(int[] scores) {
+    public static void showProgress(int[] scores, double[] thetaPerMatch) {
 
         final int N = 100; // length of running average
-        final int Shift = 100;
+        final int Shift = 50; // difference to next score average since we can't show all million scores on graph
+        final int stopIndex = Math.min(100000, scores.length);
 
         int newLen = (scores.length - N + 1) / Shift;
-        double[] xaxis = new double[newLen];
-        double[] yaxis = new double[newLen];
-        for (int i = N - 1, k=0; i < 100000 /*scores.length*/ && k<xaxis.length; i = i + Shift, k++) {
-            xaxis[k] = i;
+        double[] xEpisode = new double[newLen];
+        double[] yScore = new double[newLen];
+        double[] yTheta = new double[newLen];
+
+        int k=0;
+        for (int i = N - 1; i < stopIndex && k<xEpisode.length; i = i + Shift, k++) {
+            xEpisode[k] = i;
 
             double sum = 0.0;
             for (int j = i - N + 1; j <= i; j++) {
                 sum += scores[j];
             }
-            yaxis[k] = sum / N;
+            yScore[k] = sum / N;
+            yTheta[k] = thetaPerMatch[i];
         }
 
-        plot( xaxis, yaxis ); // create a plot using xaxis and yvalues
+        // cut off zeros at the end
+        xEpisode = Arrays.copyOfRange(xEpisode,0, k-1);
+        yScore = Arrays.copyOfRange(yScore,0, k-1);
+        yTheta = Arrays.copyOfRange(yTheta,0, k-1);
+
+        plot( xEpisode, yScore ); // a plot for score average
+        addLine( xEpisode, yTheta ); // a plot for theta average
     }
     
     /**

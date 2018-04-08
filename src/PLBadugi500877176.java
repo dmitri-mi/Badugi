@@ -82,16 +82,15 @@ class State{
     int opponentDrew;       // -1,0,1,2,3,4
     int agentDrew;    // -1,0,1,2,3,4
     int pot; // 2..3*10^6
-
-    int handActiveLength; // 1,2,3,4
-    int handActiveFirstRank; // 1,2,..,13
+    int toCall;
+    int[] handActiveRanks; // length 0-4, ordered descending , each element is in range: 1,2,..,13
 }
 
 class RandomHelper{
 
     private static Random random = create();
 
-    private static final Random create(){
+    private static Random create(){
         Random rng;
         String seed = "My string is to be used as seed of secure random number generator"+System.currentTimeMillis();
         try { rng = new SecureRandom(seed.getBytes()); }
@@ -102,19 +101,19 @@ class RandomHelper{
         return rng;
     }
 
-    public static final Action getRandomBetAction(){
+    public static Action getRandomBetAction(){
         int index = random.nextInt(Action.NumBetActions) + Action.Fold.toInt();
         Action action = Action.fromInt(index);
         return action;
     }
 
-    public static final Action getRandomDrawAction(){
+    public static Action getRandomDrawAction(){
         int index = random.nextInt(Action.NumDrawActions) + Action.DrawZero.toInt();
         Action action = Action.fromInt(index);
         return action;
     }
 
-    public static final boolean nextActionShouldBeRandom(double epsilon){
+    public static boolean nextActionShouldBeRandom(double epsilon){
         double d = random.nextDouble(); // next random double from interval [0..1]
         if(d<=epsilon) return true; // make epsilon greedy only epsilon amount of time
         return false; // otherwise use regular algorithm for action
@@ -173,7 +172,7 @@ class Vector {
         return sum;
     }
 
-    private final void validate(Vector other){
+    private void validate(Vector other){
         if(other == null || other.weight.length != this.weight.length) {
             throw new IllegalArgumentException("vector length is incompatible");
         }
@@ -209,7 +208,7 @@ class Sarsa {
     private State prevState;   // the previous state of Q-value: S
     private Action prevAction; // the action that was taken to go from prevState to newState: A
     private Vector theta; // value function weights vector for features
-    private static final int FeatureLength = 10;
+    private static final int FeatureLength = 17;
 
     public final State getPrevState(){ return prevState;}
     public final void setPrevState(State s){ prevState = s;}
@@ -223,7 +222,7 @@ class Sarsa {
 
     private final void resetRate() {
         // reset learning for new match
-        alpha = 0.3;
+        alpha = 0.2;
         gamma = 0.99;
         epsilon = epsilonZero = 0.3;
         episodeCounter = 0;
@@ -234,7 +233,7 @@ class Sarsa {
         this.handsToGo = episodesLeft;
         prevState = initialState;
         prevAction = RandomHelper.getRandomBetAction();
-        epsilon *= 0.99993;// * episodesLeft/(10*(episodeCounter+episodesLeft));
+        epsilon = episodesLeft/(10*(episodeCounter+episodesLeft));
         alpha *= 0.99993; // 10^(-3/10^5), so that after 10^5 episodes alpha will be divided by 10^-3
     }
 
@@ -295,17 +294,40 @@ class Sarsa {
     private Vector getFeatures(State state, Action action) {
         double[] feature = new double[FeatureLength];
 
+        int handActiveLength = state.handActiveRanks.length;
+        int handActiveRank1 = handActiveLength > 0 ? state.handActiveRanks[0] : 0;
+        int handActiveRank2 = handActiveLength > 1 ? state.handActiveRanks[1] : 0;
+        int handActiveRank3 = handActiveLength > 2 ? state.handActiveRanks[2] : 0;
+        int handActiveRank4 = handActiveLength > 3 ? state.handActiveRanks[3] : 0;
+
         feature[0] = 0.1;
         feature[1] = (state.position - 0.5) / 10.0;
-        feature[3] = state.drawsRemaining / 10.0;
-        feature[4] = state.raises / 10.0;
-        feature[5] = state.opponentDrew / 20.0;
-        feature[6] = state.agentDrew / 20.0;
-        feature[7] = state.pot / 1e8;
-        feature[8] = state.handActiveLength / 10.0;
-        feature[9] = state.handActiveFirstRank / 20.0;
+        feature[2] = state.drawsRemaining / 10.0;
+        feature[3] = state.raises / 10.0;
+        feature[4] = state.opponentDrew / 20.0;
+        feature[5] = state.agentDrew / 20.0;
+        feature[6] = state.pot / 1e8;
+
+        double potOdds = state.pot == 0 ? 0: state.toCall / (double) state.pot;
+        feature[7] = potOdds;
+        feature[8] = state.toCall / 1e8;
+
+        feature[9]  = handActiveLength / 10.0;
+        feature[10] = handActiveLength * handActiveLength  / 100.0;
+        feature[11] = handActiveRank1 / 20.0;
+        feature[12] = handActiveRank2 / 20.0;
+        feature[13] = handActiveRank3 / 20.0;
+        feature[14] = handActiveRank4 / 20.0;
+
+        feature[15] = (handActiveRank1 - handActiveRank2)*(handActiveRank1 - handActiveRank2)/400.0;
+
+        feature[16] = action.toInt()/ 20.0;
 
         return new Vector(feature);
+    }
+
+    public double thetaNorm(){
+        return this.theta.norm1();
     }
 }
 
@@ -322,6 +344,10 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
         name += instanceCounter;
 
         qtable = new Sarsa();
+    }
+
+    public double thetaNorm(){
+        return this.qtable.thetaNorm();
     }
 
     @Override
@@ -344,7 +370,7 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
         qtable.startEpisode(s, handsToGo);
     }
 
-    private final State getInitialState(int position){
+    private State getInitialState(int position){
         State s = new State();
 
         s.position = position;
@@ -353,8 +379,8 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
         s.raises = 0;
         s.drawsRemaining = 3;
         s.pot = 0;
-        s.handActiveLength = 0;
-        s.handActiveFirstRank = 13;
+        s.handActiveRanks = new int[0];
+        s.toCall = 0;
 
         return s;
 
@@ -362,11 +388,11 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
         // int myScore = position==0 ?  currentScore : -currentScore;
     }
 
-    private final void prepareUpdate(State newState){
+    private void prepareUpdate(State newState){
         this.newState = newState;
     }
 
-    private final void applyUpdate(boolean isBet){
+    private void applyUpdate(boolean isBet){
         // when episode (hand) starts there is no newState
         if(newState == null) return;
 
@@ -403,10 +429,6 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
         Action prevAction = qtable.getPrevAction();
         int chips = convertToChips(prevAction, toCall,  minRaise,  maxRaise);;
 
-        int[] active = hand.getActiveRanks();
-        int handActiveLength = active.length; // [1,2,3,4]
-        int handActiveFirstRank = active[0]; // from 1 (ace) to 13 (king)
-
         final State prevState = qtable.getPrevState();
 
         State newState = new State();
@@ -416,8 +438,8 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
         newState.raises = raises;
         newState.drawsRemaining = drawsRemaining;
         newState.pot = pot;
-        newState.handActiveLength = handActiveLength;
-        newState.handActiveFirstRank = handActiveFirstRank;
+        newState.toCall = toCall;
+        newState.handActiveRanks = hand.getActiveRanks();
 
         prepareUpdate(newState);
 
@@ -431,7 +453,7 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
         if(action == Action.MaxRaise) return maxRaise;
         if(action == Action.MiddleRaise){
             if(minRaise == maxRaise) return minRaise;
-            return (maxRaise - minRaise)/2+ minRaise;
+            return Math.max(minRaise, (maxRaise + minRaise)/2);
         }
 
         throw new IllegalArgumentException("Action is not supported: "+action);
@@ -445,21 +467,18 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
         Action prevAction = qtable.getPrevAction();
         List<Card> replaceCards = convertToDraw(prevAction, hand);
 
-        int[] active = hand.getActiveRanks();
-        int handActiveLength = active.length; // [1,2,3,4]
-        int handActiveFirstRank = active[0]; // from 1 (ace) to 13 (king)
-
         final State prevState = qtable.getPrevState();
 
         State newState = new State();
+
         newState.position = prevState.position;
         newState.opponentDrew = prevState.opponentDrew + (dealerDrew == -1 ? 0: dealerDrew);
         newState.agentDrew = prevState.agentDrew + replaceCards.size();
         newState.raises = prevState.raises;
         newState.drawsRemaining = drawsRemaining;
         newState.pot = pot;
-        newState.handActiveLength = handActiveLength;
-        newState.handActiveFirstRank = handActiveFirstRank;
+        newState.toCall = prevState.toCall;
+        newState.handActiveRanks = hand.getActiveRanks();
 
         prepareUpdate(newState);
 
@@ -469,19 +488,33 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
     private final List<Card> convertToDraw(Action action, PLBadugiHand hand){
 
         List<Card> inactiveCards = hand.getInactiveCards();
-        int countInactive = inactiveCards.size();
         int cardsToDraw = action.toInt() - Action.DrawZero.toInt();
 
         if(cardsToDraw < 0 || cardsToDraw > 4) {
             throw new IllegalArgumentException("No support for draw action: "+action);
         }
 
+        int countInactive = inactiveCards.size();
         int count = Math.min(cardsToDraw, countInactive); // limit the number of cards to draw by count of inactive
-        return inactiveCards.subList(0, count);
+        List<Card> inactive = inactiveCards.subList(0, count);
+
+        // draw from active if required
+        if(cardsToDraw > count){
+            List<Card> active = hand.getActiveCards().subList(0, cardsToDraw-count);
+            inactive.addAll(active);
+        }
+        return inactiveCards;
     }
 
     @Override
     public void handComplete(PLBadugiHand yourHand, PLBadugiHand opponentHand, int result) {
+
+        boolean win = false;
+
+        // if agent lost but could have won
+        if(result<0 && opponentHand != null && yourHand.compareTo(opponentHand)>0){
+            result *=2; // increase punishment
+        }
 
         qtable.updateTerminal(result);
     }
