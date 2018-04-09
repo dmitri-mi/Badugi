@@ -255,7 +255,7 @@ class Sarsa {
     private State prevState;   // the previous state of Q-value: S
     private Action prevAction; // the action that was taken to go from prevState to newState: A
     private Vector theta; // value function weights vector for features
-    private static final int FeatureLength = 9;
+    private static final int FeatureLength = 10;
 
     public final State getPrevState(){ return prevState;}
     public final void setPrevState(State s){ prevState = s;}
