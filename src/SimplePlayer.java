@@ -25,7 +25,7 @@ public class SimplePlayer implements PLBadugiPlayer  {
             int amount = (int)(maxRaise - (maxRaise - minRaise) * (rng.nextDouble() * 0.7 + 0.3));
             return amount; // raise
         }
-        return 0; // fold
+        return toCall-1; // fold
     }
 
     @Override

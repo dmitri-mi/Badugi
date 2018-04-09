@@ -1,10 +1,14 @@
 // VERSION MARCH 6, 2018
 
-import easyjcckit.QuickPlot;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Random;
 
-import java.util.*;
-import java.io.*;
-import java.security.*;
 import static easyjcckit.QuickPlot.*;
 
 public class PLBadugiRunner {
@@ -14,9 +18,9 @@ public class PLBadugiRunner {
     // How many bets and raises are allowed during one betting round.
     public static final int MAX_RAISES = 4;
     // Number of hands in each heads-up match.
-    public static final int HANDS_PER_MATCH = 1_000_000;
+    public static final int HANDS_PER_MATCH = 1_000_00;
     // How often to print out the current hand even when silent (-1 means never)
-    private static final int SAMPLE_OUTPUT= 200000;
+    private static final int SAMPLE_OUTPUT= (int)2e8;
     // Minimum raise in each betting round.
     private static final int[] MIN_RAISE = {4, 2, 2, 1};
     // Whether two agent objects of same type will play against each other in the tournament.
@@ -215,11 +219,11 @@ public class PLBadugiRunner {
         players[0].finishedMatch(score);
         players[1].finishedMatch(-score);
 
-        showProgress(scoresPerMatch, thetaPerMatch);
+        showProgress(new PrintWriter(System.out), scoresPerMatch, thetaPerMatch);
         return score;
     }
 
-    public static void showProgress(int[] scores, double[] thetaPerMatch) {
+    public static void showProgress(PrintWriter out, int[] scores, double[] thetaPerMatch) {
 
         final int N = 100; // length of running average
         final int Shift = 50; // difference to next score average since we can't show all million scores on graph
@@ -247,8 +251,47 @@ public class PLBadugiRunner {
         yScore = Arrays.copyOfRange(yScore,0, k-1);
         yTheta = Arrays.copyOfRange(yTheta,0, k-1);
 
+        if(out !=null) {
+            // message(out, "score max: " + max(scores));
+            // message(out, "score min: " + min(scores));
+            message(out, "score avg: " + avg(scores));
+            message(out, "theta avg: " + avg(yTheta));
+        }
+
         plot( xEpisode, yScore ); // a plot for score average
         addLine( xEpisode, yTheta ); // a plot for theta average
+    }
+
+    private static double max(int[] array){
+        int max = Integer.MIN_VALUE;
+        for (int i = 0; i < array.length; i++) {
+            if(max < array[i]) max = array[i];
+        }
+        return max;
+    }
+
+    private static double min(int[] array){
+        int min = Integer.MAX_VALUE;
+        for (int i = 0; i < array.length; i++) {
+            if(min > array[i]) min = array[i];
+        }
+        return min;
+    }
+
+    private static double avg(int[] array){
+        double sum = 0;
+        for (int i = 0; i < array.length; i++) {
+            sum += array[i];
+        }
+        return sum/array.length;
+    }
+
+    private static double avg(double[] array){
+        double sum = 0;
+        for (int i = 0; i < array.length; i++) {
+            sum += array[i];
+        }
+        return sum/array.length;
     }
     
     /**
@@ -367,15 +410,19 @@ public class PLBadugiRunner {
 
         /* Modify this array to include the player classes that participate in the tournament. */
         String[] playerClasses = {
-          "IlkkaPlayer3", "PLBadugi500877176"
+
+                //"SimplePlayer"
+                "IlkkaPlayer3" ,
+                "PLBadugi500877176",
         };
         
         PrintWriter out = new PrintWriter(System.out);
         PrintWriter result = new PrintWriter(new FileWriter("results.txt"));
-        badugiTournament(playerClasses, out, result);
+
+        for (int i = 0; i < 1; i++) {
+            badugiTournament(playerClasses, out, result);
+        }
 
         result.close();
-
-
-    }   
+    }
 }

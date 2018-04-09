@@ -101,6 +101,17 @@ class RandomHelper{
         return rng;
     }
 
+    public static boolean nextActionShouldBeRandom(double epsilon){
+        double d = random.nextDouble(); // next random double from interval [0..1]
+        if(d<=epsilon) return true; // make epsilon greedy only epsilon amount of time
+        return false; // otherwise use regular algorithm for action
+    }
+
+    public static Action getRandomAction(boolean isBet) {
+        if(isBet) return getRandomBetAction();
+        return getRandomDrawAction();
+    }
+
     public static Action getRandomBetAction(){
         int index = random.nextInt(Action.NumBetActions) + Action.Fold.toInt();
         Action action = Action.fromInt(index);
@@ -113,15 +124,48 @@ class RandomHelper{
         return action;
     }
 
-    public static boolean nextActionShouldBeRandom(double epsilon){
-        double d = random.nextDouble(); // next random double from interval [0..1]
-        if(d<=epsilon) return true; // make epsilon greedy only epsilon amount of time
-        return false; // otherwise use regular algorithm for action
+    public static Vector getRandomVector(int length){
+        double[] d = new double[length];
+        for (int i = 0; i <length; i++) {
+            d[i] = random.nextDouble();
+        }
+
+        Vector v = new Vector(d);
+        return v;
     }
 
-    public static Action getRandomAction(boolean isBet) {
-        if(isBet) return getRandomBetAction();
-        return getRandomDrawAction();
+    public static Action getSoftmaxRandomAction(List<Double> qs, List<Action> actions, double temperature) {
+        if(temperature <0 || temperature >1) throw new IllegalArgumentException("Temperature should be in range [0..1]");
+
+        double z = 0;
+        for (double value : qs) {
+            z += Math.exp(value / temperature);
+        }
+
+        int length = qs.size();
+
+        double[] probabilities = new double[length];
+        for (int i = 0; i < length; i++) {
+            double value = qs.get(i);
+            probabilities[i] = Math.exp(value / temperature) / z;
+        }
+
+        int index = categoricalDraw(probabilities);
+
+        return actions.get(index);
+    }
+
+    private static int categoricalDraw(double[] probabilities) {
+        double rand = random.nextDouble();
+        double cumulativeProbability = 0;
+        for (int i = 0; i < probabilities.length; i++) {
+            double probability = probabilities[i];
+            cumulativeProbability += probability;
+            if (cumulativeProbability > rand) {
+                return i;
+            }
+        }
+        return probabilities.length - 1;
     }
 }
 
@@ -180,7 +224,7 @@ class Vector {
 
     public final double norm1(){
         double sum = 0.0;
-        for (double v: this.weight) {
+        for (double v: weight) {
             sum += Math.abs(v);
         }
         return sum;
@@ -188,7 +232,7 @@ class Vector {
 
     public final double norm2(){
         double sum = 0.0;
-        for (double v: this.weight) {
+        for (double v: weight) {
             sum += v*v;
         }
         sum = Math.sqrt(sum);
@@ -198,7 +242,10 @@ class Vector {
 
 class Sarsa {
 
+    private double temperature; // [0..1] simulated annealing parameter for soft-max random action selection
+    private double temperatureZero; //
     private double alpha; // learning rate
+    private double alphaZero; // learning rate at time t=0
     private double gamma; // discount factor
     private double epsilon; // epsilon greedy parameter for exploration vs exploitation
     private double epsilonZero; // starting value of epsilon
@@ -208,7 +255,7 @@ class Sarsa {
     private State prevState;   // the previous state of Q-value: S
     private Action prevAction; // the action that was taken to go from prevState to newState: A
     private Vector theta; // value function weights vector for features
-    private static final int FeatureLength = 17;
+    private static final int FeatureLength = 9;
 
     public final State getPrevState(){ return prevState;}
     public final void setPrevState(State s){ prevState = s;}
@@ -217,44 +264,62 @@ class Sarsa {
 
     public Sarsa(){
         resetRate();
-        theta = new Vector(FeatureLength);
+        theta = new Vector(FeatureLength); //RandomHelper.getRandomVector(FeatureLength);
     }
 
-    private final void resetRate() {
+    public final void resetRate() {
         // reset learning for new match
-        alpha = 0.2;
+        alpha = alphaZero = 0.2;
         gamma = 0.99;
         epsilon = epsilonZero = 0.3;
         episodeCounter = 0;
+        temperature = temperatureZero = 1.0;
     }
 
     public final void startEpisode(State initialState, int episodesLeft) {
         episodeCounter++;
-        this.handsToGo = episodesLeft;
+        handsToGo = episodesLeft;
         prevState = initialState;
         prevAction = RandomHelper.getRandomBetAction();
-        epsilon = episodesLeft/(10*(episodeCounter+episodesLeft));
-        alpha *= 0.99993; // 10^(-3/10^5), so that after 10^5 episodes alpha will be divided by 10^-3
+
+        temperature = temperatureZero / episodeCounter;
+        epsilon = (episodeCounter %70==0)? epsilon/4 : epsilon;//epsilonZero*episodesLeft/(episodeCounter+episodesLeft);
+        alpha = alpha> 1e-3 ? alphaZero*(1-Math.exp(-episodesLeft/1000)): alpha;
+        //alpha = alphaZero/(alphaZero + episodeCounter);
+        //alpha = alpha < 1e-2 ? alpha : (alpha * 0.99993); // 10^(-3/10^5), so that after 10^5 episodes alpha will be divided by 10^-3
     }
 
-    public final Action nextAction(State newState, boolean isBet){
-
+    public final Action nextAction(State newState, boolean isBet) {
         // Q(S,A,T) = sum( Ti * Fi ), Fi = Qi(S,A) - feature i,
         // action = e-greedy argmax( Q(S,A,T), S=newState )
 
-        if(RandomHelper.nextActionShouldBeRandom(epsilon)){
-            return RandomHelper.getRandomAction(isBet);
+        if (RandomHelper.nextActionShouldBeRandom(epsilon)) {
+
+            final boolean isSoftmax = false;
+            if(isSoftmax) {
+                List<Double> qs = new ArrayList<>();
+                List<Action> actions = new ArrayList<>();
+
+                for (Action action : Action.allActions(isBet)) {
+                    double q = q(newState, action, theta);
+                    qs.add(q);
+                    actions.add(action);
+                }
+
+                return RandomHelper.getSoftmaxRandomAction(qs, actions, temperature);
+            }
+            else return RandomHelper.getRandomAction(isBet);
         }
 
         Action bestAction = null;
         double max = Double.NEGATIVE_INFINITY;
         boolean isFirst = true;
 
-        for(Action action: Action.allActions(isBet)) {
+        for (Action action : Action.allActions(isBet)) {
 
             double q = q(newState, action, theta);
 
-            if(isFirst){
+            if (isFirst) {
                 isFirst = false;
                 max = q;
                 bestAction = action;
@@ -275,6 +340,10 @@ class Sarsa {
         Vector gradient = getFeatures(prevState, prevAction);
         gradient.multiply(scalar);
         theta.add(gradient);
+
+        // // normalize
+        // double norm = theta.norm2();
+        // if(norm > 1.0) theta.multiply(1.0/norm);
     }
 
     public final void updateTerminal(double reward) {
@@ -292,42 +361,42 @@ class Sarsa {
     }
 
     private Vector getFeatures(State state, Action action) {
-        double[] feature = new double[FeatureLength];
 
         int handActiveLength = state.handActiveRanks.length;
         int handActiveRank1 = handActiveLength > 0 ? state.handActiveRanks[0] : 0;
         int handActiveRank2 = handActiveLength > 1 ? state.handActiveRanks[1] : 0;
         int handActiveRank3 = handActiveLength > 2 ? state.handActiveRanks[2] : 0;
         int handActiveRank4 = handActiveLength > 3 ? state.handActiveRanks[3] : 0;
-
-        feature[0] = 0.1;
-        feature[1] = (state.position - 0.5) / 10.0;
-        feature[2] = state.drawsRemaining / 10.0;
-        feature[3] = state.raises / 10.0;
-        feature[4] = state.opponentDrew / 20.0;
-        feature[5] = state.agentDrew / 20.0;
-        feature[6] = state.pot / 1e8;
-
         double potOdds = state.pot == 0 ? 0: state.toCall / (double) state.pot;
-        feature[7] = potOdds;
-        feature[8] = state.toCall / 1e8;
 
-        feature[9]  = handActiveLength / 10.0;
-        feature[10] = handActiveLength * handActiveLength  / 100.0;
-        feature[11] = handActiveRank1 / 20.0;
-        feature[12] = handActiveRank2 / 20.0;
-        feature[13] = handActiveRank3 / 20.0;
-        feature[14] = handActiveRank4 / 20.0;
+        double[] feature = new double[FeatureLength];
 
-        feature[15] = (handActiveRank1 - handActiveRank2)*(handActiveRank1 - handActiveRank2)/400.0;
+        int i=0;
+        feature[i++] = 1.0;
+        feature[i++] = state.position - 0.5;
+        feature[i++] = state.drawsRemaining;
+        feature[i++] = state.toCall >0 ? state.raises : 0.0;  // opponent raised
+        feature[i++] = 1/(1+state.opponentDrew);   //   <-- removing improves score avg
+        feature[i++] = state.agentDrew;
+        feature[i++] = potOdds;
+        feature[i++] = handActiveLength;
+        feature[i++] = handActiveLength * handActiveLength;
 
-        feature[16] = action.toInt()/ 20.0;
+        double rankDiff = 1.0;
+        rankDiff *= handActiveLength > 1 ? (handActiveRank1 - handActiveRank2) : 1.0;
+        rankDiff *= handActiveLength > 2 ? (handActiveRank2 - handActiveRank3) : 1.0;
+        rankDiff *= handActiveLength > 3 ? (handActiveRank3 - handActiveRank4) : 1.0;
+        if(rankDiff == 1.0) rankDiff = 0.0;
+        feature[i++] = rankDiff;
 
-        return new Vector(feature);
+        Vector v = new Vector(feature);
+        double norm = v.norm2();
+        if(norm != 0) v.multiply(1/norm);
+        return v;
     }
 
     public double thetaNorm(){
-        return this.theta.norm1();
+        return this.theta.norm2();
     }
 }
 
@@ -351,7 +420,9 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
     }
 
     @Override
-    public void startNewMatch(int handsToGo) { }
+    public void startNewMatch(int handsToGo) {
+          qtable.resetRate();
+    }
 
     @Override
     public void finishedMatch(int finalScore) { }
@@ -427,7 +498,7 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
         applyUpdate(true);
 
         Action prevAction = qtable.getPrevAction();
-        int chips = convertToChips(prevAction, toCall,  minRaise,  maxRaise);;
+        int chips = convertToChips(prevAction, toCall,  minRaise,  maxRaise);
 
         final State prevState = qtable.getPrevState();
 
