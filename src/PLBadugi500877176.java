@@ -78,9 +78,12 @@ enum Action{
 class State{
     int position;// 0 if the agent is the dealer or 1 - otherwise
     int drawsRemaining; // 3,2,1,0
-    int raises;         // 0,1,2,3,4
-    int opponentDrew;       // -1,0,1,2,3,4
-    int agentDrew;    // -1,0,1,2,3,4
+    int raises;         // 0,1,2,3,4 => total raises of agent and opponent in this drawing round
+    int agentRaises;    // agent raises in this drawing round
+    int opponentCalls; // opponent calls in this drawing round
+    int opponentRaises; // opponent raises in this drawing round
+    int opponentDrew;   // -1,0,1,2,3,4,... => total opponent draws in all drawing rounds till now
+    int agentDrew;      // -1,0,1,2,3,4,... => total agent    draws in all drawing rounds till now
     int pot; // 2..3*10^6
     int toCall;
     int[] handActiveRanks; // length 0-4, ordered descending , each element is in range: 1,2,..,13
@@ -255,7 +258,8 @@ class Sarsa {
     private State prevState;   // the previous state of Q-value: S
     private Action prevAction; // the action that was taken to go from prevState to newState: A
     private Vector theta; // value function weights vector for features
-    private static final int FeatureLength = 10;
+    private static final int FeatureLength = 1+18;//* (Action.NumBetActions + Action.NumDrawActions);
+    private int opponentFoldHands = 0; // number of episodes that ended with opponent folding
 
     public final State getPrevState(){ return prevState;}
     public final void setPrevState(State s){ prevState = s;}
@@ -274,6 +278,7 @@ class Sarsa {
         epsilon = epsilonZero = 0.3;
         episodeCounter = 0;
         temperature = temperatureZero = 1.0;
+        opponentFoldHands = 0;
     }
 
     public final void startEpisode(State initialState, int episodesLeft) {
@@ -346,7 +351,11 @@ class Sarsa {
         // if(norm > 1.0) theta.multiply(1.0/norm);
     }
 
-    public final void updateTerminal(double reward) {
+    public final void updateTerminal(double reward, boolean opponentFolded) {
+
+        if(reward>0 && opponentFolded) {
+            opponentFoldHands++;
+        }
 
         double scalar = alpha * (reward - q(prevState,prevAction,theta));
         Vector gradient = getFeatures(prevState, prevAction);
@@ -363,36 +372,65 @@ class Sarsa {
     private Vector getFeatures(State state, Action action) {
 
         int handActiveLength = state.handActiveRanks.length;
-        int handActiveRank1 = handActiveLength > 0 ? state.handActiveRanks[0] : 0;
-        int handActiveRank2 = handActiveLength > 1 ? state.handActiveRanks[1] : 0;
-        int handActiveRank3 = handActiveLength > 2 ? state.handActiveRanks[2] : 0;
-        int handActiveRank4 = handActiveLength > 3 ? state.handActiveRanks[3] : 0;
+        int handRankLengthChange = state.handActiveRanks.length - prevState.handActiveRanks.length;
         double potOdds = state.pot == 0 ? 0: state.toCall / (double) state.pot;
+
+        //Aggression factor= AF. AF > 1 aggressive, AF<1 passive
+        double opponentAggression = state.opponentCalls==0? state.opponentRaises :
+                ((double)state.opponentRaises)/state.opponentCalls;
+
+        // Folds >70% =>Loose, otherwise Tight player
+        double opponentTightness = ((double) opponentFoldHands) / episodeCounter;
+        
+        double actionValue = action.toInt();
 
         double[] feature = new double[FeatureLength];
 
         int i=0;
         feature[i++] = 1.0;
-        feature[i++] = state.position - 0.5;
-        feature[i++] = state.drawsRemaining;
-        feature[i++] = state.toCall >0 ? state.raises : 0.0;  // opponent raised
-        feature[i++] = 1/(1+state.opponentDrew);   //   <-- removing improves score avg
-        feature[i++] = state.agentDrew;
-        feature[i++] = potOdds;
-        feature[i++] = handActiveLength;
-        feature[i++] = handActiveLength * handActiveLength;
+
+        //for(Action a: Action.values()) {
+        //
+        //    boolean isCurrent = a == action;
+            feature[i++] = /*!isCurrent ? 0 : */ (handActiveLength);
+            feature[i++] = /*!isCurrent ? 0 : */ (handActiveLength * handActiveLength);
+            feature[i++] = /*!isCurrent ? 0 : */ (handRankLengthChange);
+            feature[i++] = /*!isCurrent ? 0 : */ (handRankLengthChange * handRankLengthChange);
+            feature[i++] = /*!isCurrent ? 0 : */ (handRankDensity(state));
+            feature[i++] = /*!isCurrent ? 0 : */ (handRankDensity(state) - handRankDensity(prevState));
+            feature[i++] = /*!isCurrent ? 0 : */ (state.position - 0.5);
+            feature[i++] = /*!isCurrent ? 0 : */ (state.drawsRemaining);
+            feature[i++] = /*!isCurrent ? 0 : */ (state.opponentRaises);  // opponent raised in this drawing round
+            feature[i++] = /*!isCurrent ? 0 : */ (state.opponentRaises * state.opponentRaises);  // opponent raised in this drawing round
+            feature[i++] = /*!isCurrent ? 0 : */ (state.opponentDrew);
+            feature[i++] = /*!isCurrent ? 0 : */ (state.agentDrew * state.drawsRemaining);
+            feature[i++] = /*!isCurrent ? 0 : */ (opponentAggression);
+            feature[i++] = /*!isCurrent ? 0 : */ (opponentAggression * opponentAggression);
+            feature[i++] = /*!isCurrent ? 0 : */ (opponentTightness);
+            feature[i++] = /*!isCurrent ? 0 : */ (opponentTightness * opponentTightness);
+            feature[i++] = /*!isCurrent ? 0 : */ (opponentTightness * opponentAggression);
+            feature[i++] = /*!isCurrent ? 0 : */ (potOdds);
+        //}
+
+        Vector v = new Vector(feature);
+        double norm = v.norm2();
+        if(norm != 0) v.multiply(1/norm);
+        return v;
+    }
+
+    private double handRankDensity(State state){
+        int handActiveLength = state.handActiveRanks.length;
+        int handActiveRank1 = handActiveLength > 0 ? state.handActiveRanks[0] : 0;
+        int handActiveRank2 = handActiveLength > 1 ? state.handActiveRanks[1] : 0;
+        int handActiveRank3 = handActiveLength > 2 ? state.handActiveRanks[2] : 0;
+        int handActiveRank4 = handActiveLength > 3 ? state.handActiveRanks[3] : 0;
 
         double rankDiff = 1.0;
         rankDiff *= handActiveLength > 1 ? (handActiveRank1 - handActiveRank2) : 1.0;
         rankDiff *= handActiveLength > 2 ? (handActiveRank2 - handActiveRank3) : 1.0;
         rankDiff *= handActiveLength > 3 ? (handActiveRank3 - handActiveRank4) : 1.0;
         if(rankDiff == 1.0) rankDiff = 0.0;
-        feature[i++] = rankDiff;
-
-        Vector v = new Vector(feature);
-        double norm = v.norm2();
-        if(norm != 0) v.multiply(1/norm);
-        return v;
+        return rankDiff;
     }
 
     public double thetaNorm(){
@@ -416,7 +454,7 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
     }
 
     public double thetaNorm(){
-        return this.qtable.thetaNorm();
+        return qtable.thetaNorm();
     }
 
     @Override
@@ -448,6 +486,9 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
         s.opponentDrew = 0;
         s.agentDrew = 0;
         s.raises = 0;
+        s.agentRaises = 0;
+        s.opponentRaises = 0;
+        s.opponentCalls = 0;
         s.drawsRemaining = 3;
         s.pot = 0;
         s.handActiveRanks = new int[0];
@@ -506,7 +547,13 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
         newState.position = prevState.position;
         newState.opponentDrew = prevState.opponentDrew + (opponentDrew == -1 ? 0: opponentDrew);
         newState.agentDrew = prevState.agentDrew;
-        newState.raises = raises;
+        newState.raises = raises; // total raises in this drawing round for both agent and opponent
+        newState.agentRaises =
+                //(raises==0 ? 0 : prevState.agentRaises) // if new drawing round => reset counter
+                prevState.agentRaises    // add to total raises in all rounds till now
+                 + ((chips > toCall)? 1 : 0); // if agent raises now => increment counter
+        newState.opponentRaises = prevState.opponentRaises + (toCall>0 ? 1 : 0);
+        newState.opponentCalls = prevState.opponentCalls + (toCall==0 ? 1 : 0);
         newState.drawsRemaining = drawsRemaining;
         newState.pot = pot;
         newState.toCall = toCall;
@@ -546,6 +593,9 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
         newState.opponentDrew = prevState.opponentDrew + (dealerDrew == -1 ? 0: dealerDrew);
         newState.agentDrew = prevState.agentDrew + replaceCards.size();
         newState.raises = prevState.raises;
+        newState.agentRaises = prevState.agentRaises;
+        newState.opponentRaises = prevState.opponentRaises;
+        newState.opponentCalls = prevState.opponentCalls;
         newState.drawsRemaining = drawsRemaining;
         newState.pot = pot;
         newState.toCall = prevState.toCall;
@@ -580,14 +630,16 @@ public class PLBadugi500877176 implements PLBadugiPlayer {
     @Override
     public void handComplete(PLBadugiHand yourHand, PLBadugiHand opponentHand, int result) {
 
-        boolean win = false;
+        // // if agent lost but could have won
+        // if(result<0 && opponentHand != null && yourHand.compareTo(opponentHand)>0){
+        //     result *=2; // increase punishment
+        // }
+        // // if agent won but could have lost
+        // else if(result>0 && opponentHand != null && yourHand.compareTo(opponentHand)<0){
+        //     result *=2; // increase reward
+        // }
 
-        // if agent lost but could have won
-        if(result<0 && opponentHand != null && yourHand.compareTo(opponentHand)>0){
-            result *=2; // increase punishment
-        }
-
-        qtable.updateTerminal(result);
+        qtable.updateTerminal(result, opponentHand==null);
     }
 
     @Override
