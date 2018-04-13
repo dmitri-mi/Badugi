@@ -18,16 +18,20 @@ public class PLBadugiRunner {
     // How many bets and raises are allowed during one betting round.
     public static final int MAX_RAISES = 4;
     // Number of hands in each heads-up match.
-    public static final int HANDS_PER_MATCH = 1_000_00;
+    public static final int HANDS_PER_MATCH = 1_00_000;
     // How often to print out the current hand even when silent (-1 means never)
-    private static final int SAMPLE_OUTPUT= (int)2e8;
+    private static final int SAMPLE_OUTPUT = 0;//HANDS_PER_MATCH;//(int)2e8;
     // Minimum raise in each betting round.
     private static final int[] MIN_RAISE = {4, 2, 2, 1};
     // Whether two agent objects of same type will play against each other in the tournament.
     private static boolean SAME_TYPE_PLAY = false;
     // How many hands have been played so far in this entire tournament.
     private static long handCount = 0;
-    
+
+    private static int[] numFolds = new int[2];
+    private static int[] numCalls = new int[2];
+    private static int[] numRaises = new int[2];
+
     // A utility method to output a message to the given PrintWriter, forcing it to flush() after the message.
     private static void message(PrintWriter out, String msg) {
         if(out != null) {
@@ -49,7 +53,8 @@ public class PLBadugiRunner {
      * @return The result of the hand, as indicated by the amount won by player 0 from player 1. A negative result
      * therefore means that the player 0 lost the hand.
      */
-    public static int playOneHand(int handSize, EfficientDeck deck, PLBadugiPlayer[] players, PrintWriter out, int handsToGo, int currentScore) {
+    public static int playOneHand(int handSize, EfficientDeck deck, PLBadugiPlayer[] players, PrintWriter out, PrintWriter err, int handsToGo, int currentScore) {
+
         message(out, "\n----\nHand #" + handCount + " for " + players[0].getAgentName() + " vs. " + players[1].getAgentName()
         + ". Both players ante " + ANTE + ".");
         int pot = 2 * ANTE;
@@ -64,10 +69,10 @@ public class PLBadugiRunner {
         
         try {
             players[0].startNewHand(0, handsToGo, currentScore);
-        } catch(Exception e) { return -1000; }
+        } catch(Exception e) {message(err, e.toString()); return -1000; }
         try {
             players[1].startNewHand(1, handsToGo, -currentScore);
-        } catch(Exception e) { return +1000; }
+        } catch(Exception e) {message(err, e.toString()); return +1000; }
 
         // A single badugi hand consists of four betting streets and three draws.
         for(int drawsRemaining = 3; drawsRemaining >= 0; drawsRemaining--) {
@@ -107,19 +112,32 @@ public class PLBadugiRunner {
                         (toCall == 0 ? "CHECKS" : "CALLS " + toCall) )) + "." );
                 } catch(Exception e) { // Any failure is considered a checkfold.
                     message(out, players[currPlayer].getAgentName() + " bettingAction method failed! " + e);
-                    action = 0;
+                    message(err, e.toString());
+                    action = toCall-1;
                 }
                 if(action < toCall) { // current player folds, the hand is finished
+                    numFolds[currPlayer]++;
+
                     message(out, players[otherPlayer].getAgentName() + " won " + totalBets[currPlayer] + " chips.");
-                    try { players[currPlayer].handComplete(hands[currPlayer], null, -totalBets[currPlayer]); } catch(Exception e)  { message(out, players[currPlayer].getAgentName() + " handComplete method failed! " + e); }
-                    try { players[otherPlayer].handComplete(hands[otherPlayer], null, totalBets[currPlayer]); } catch(Exception e) { message(out, players[currPlayer].getAgentName() + " handComplete method failed! " + e); }
+                    try { players[currPlayer].handComplete(hands[currPlayer], null, -totalBets[currPlayer]); }
+                    catch(Exception e)  {
+                        message(out, players[currPlayer].getAgentName() + " handComplete method failed! " + e);
+                        message(err, e.toString());
+                    }
+                    try { players[otherPlayer].handComplete(hands[otherPlayer], null, totalBets[currPlayer]); }
+                    catch(Exception e) {
+                        message(out, players[currPlayer].getAgentName() + " handComplete method failed! " + e);
+                        message(err, e.toString());
+                    }
                     return totalBets[currPlayer] * (currPlayer == 1 ? +1 : -1);
                 }
                 else if(action == toCall) { // current player merely calls
-                    calls++;                    
+                    numCalls[currPlayer]++;
+                    calls++;
                 }
                 else { // current player raises
 
+                    numRaises[currPlayer]++;
                     raises++;
                     calls = 0;
                     // update the highest raise made on this betting round
@@ -137,10 +155,14 @@ public class PLBadugiRunner {
                     try {
                         toReplace = players[currPlayer].drawingAction(drawsRemaining, hands[currPlayer], pot,
                         currPlayer == 0 ? -1: drawCounts[0]);
-                        if(toReplace.size() > 4) { throw new IllegalArgumentException("Trying to replace too many cards."); }
+                        if(toReplace.size() > 4) {
+                            message(err,"Trying to replace too many cards");
+                            throw new IllegalArgumentException("Trying to replace too many cards.");
+                        }
                         message(out, players[currPlayer].getAgentName() + " replaces cards " + toReplace + ".");
                         for(Card c: toReplace) {
                             if(!cards.contains(c)) {
+                                message(err,"Trying to replace nonexistent card");
                                 throw new IllegalArgumentException("Trying to replace nonexistent card " + c);
                             }
                             hands[currPlayer].replaceCard(c, deck);
@@ -148,6 +170,8 @@ public class PLBadugiRunner {
                         drawCounts[currPlayer] = toReplace.size();
                     } catch(Exception e) {
                         message(out, players[currPlayer].getAgentName() + ": drawingAction method failed: " + e);
+                        message(err, e.toString());
+                        numFolds[currPlayer]++;
                         return totalBets[currPlayer] * (currPlayer == 1 ? +1 : -1);
                     }
                 }
@@ -163,13 +187,29 @@ public class PLBadugiRunner {
         int result = showdown < 0 ? -totalBets[0] : (showdown > 0 ? totalBets[1] : 0);
         if(showdown != 0) {
             message(out, players[showdown > 0 ? 0 : 1].getAgentName() +" won " + totalBets[1] + " chips.");
-            try { players[0].handComplete(hands[0], hands[1], showdown > 0 ? totalBets[0] : -totalBets[0]); } catch(Exception e) { message(out, players[0].getAgentName() + " handComplete method failed! " + e); }
-            try { players[1].handComplete(hands[1], hands[0], showdown < 0 ? totalBets[1] : -totalBets[1]); } catch(Exception e) { message(out, players[1].getAgentName() + " handComplete method failed! " + e); }
+            try { players[0].handComplete(hands[0], hands[1], showdown > 0 ? totalBets[0] : -totalBets[0]); }
+            catch(Exception e) {
+                message(out, players[0].getAgentName() + " handComplete method failed! " + e);
+                message(err, e.toString());
+            }
+            try { players[1].handComplete(hands[1], hands[0], showdown < 0 ? totalBets[1] : -totalBets[1]); }
+            catch(Exception e) {
+                message(out, players[1].getAgentName() + " handComplete method failed! " + e);
+                message(err, e.toString());
+            }
         }
         else {
             message(out, "Both players brought equal badugi hands to showdown.");
-            try { players[0].handComplete(hands[0], hands[1], 0); } catch(Exception e) { message(out, players[0].getAgentName() + " handComplete method failed! " + e); }
-            try { players[1].handComplete(hands[1], hands[0], 0); } catch(Exception e) { message(out, players[1].getAgentName() + " handComplete method failed! " + e); }
+            try { players[0].handComplete(hands[0], hands[1], 0); }
+            catch(Exception e) {
+                message(out, players[0].getAgentName() + " handComplete method failed! " + e);
+                message(err, e.toString());
+            }
+            try { players[1].handComplete(hands[1], hands[0], 0); }
+            catch(Exception e) {
+                message(out, players[1].getAgentName() + " handComplete method failed! " + e);
+                message(err, e.toString());
+            }
         }
         return result;
     }
@@ -184,14 +224,24 @@ public class PLBadugiRunner {
      * @return The result of the match, as indicated by the amount won by player 0 from player 1. A negative result
      * therefore means that the player 0 lost the match.
      */
-    public static int playHeadsUp(EfficientDeck deck, PLBadugiPlayer[] players, PrintWriter out, int hands) {
+    public static int playHeadsUp(EfficientDeck deck, PLBadugiPlayer[] players, PrintWriter out, PrintWriter err, int hands) {
         int score = 0;
         PLBadugiPlayer[] thisRoundPlayers = new PLBadugiPlayer[2];
         players[0].startNewMatch(hands);
         players[1].startNewMatch(hands);
 
         PLBadugi500877176 me = players[0] instanceof PLBadugi500877176 ? (PLBadugi500877176) players[0] : null;
-        if(me==null) me = players[1] instanceof PLBadugi500877176 ? (PLBadugi500877176) players[1] : null;
+        if(me==null)      me = players[1] instanceof PLBadugi500877176 ? (PLBadugi500877176) players[1] : null;
+
+        numFolds = new int[players.length];
+        numCalls = new int[players.length];
+        numRaises = new int[players.length];
+
+        for (int i = 0; i < players.length; i++) {
+            numFolds [i]=0;
+            numCalls [i]=0;
+            numRaises[i]=0;
+        }
 
         int[] scoresPerMatch = new int[hands];
         double[] thetaPerMatch = new double[hands];
@@ -207,8 +257,9 @@ public class PLBadugiRunner {
             if(SAMPLE_OUTPUT > 0 && handCount % SAMPLE_OUTPUT == 0 && out == null) {
                 out2 = new PrintWriter(System.out);
             }
+            else if(out != null) out2=out;
 
-            int matchScore = sign * playOneHand(4, deck, thisRoundPlayers, out2, hands, sign * score);
+            int matchScore = sign * playOneHand(4, deck, thisRoundPlayers, out2, err, hands, sign * score);
 
             score += matchScore; // total score
 
@@ -219,17 +270,19 @@ public class PLBadugiRunner {
         players[0].finishedMatch(score);
         players[1].finishedMatch(-score);
 
-        showProgress(new PrintWriter(System.out), scoresPerMatch, thetaPerMatch);
+        showProgress(new PrintWriter(System.out), scoresPerMatch, thetaPerMatch, players);
         return score;
     }
 
-    public static void showProgress(PrintWriter out, int[] scores, double[] thetaPerMatch) {
+    public static void showProgress(PrintWriter out, int[] scores, double[] thetaPerMatch, PLBadugiPlayer[] players) {
 
         final int N = 100; // length of running average
         final int Shift = 50; // difference to next score average since we can't show all million scores on graph
         final int stopIndex = Math.min(100000, scores.length);
 
         int newLen = (scores.length - N + 1) / Shift;
+        if(newLen <= 0) return;
+
         double[] xEpisode = new double[newLen];
         double[] yScore = new double[newLen];
         double[] yTheta = new double[newLen];
@@ -254,12 +307,25 @@ public class PLBadugiRunner {
         if(out !=null) {
             // message(out, "score max: " + max(scores));
             // message(out, "score min: " + min(scores));
+            message(out, " " );
             message(out, "score avg: " + avg(scores));
             message(out, "theta avg: " + avg(yTheta));
-        }
 
+            for(int i=0;i<players.length; i++) {
+
+                message(out, " " );
+                PLBadugiPlayer p = players[i];
+                message(out, ""+p.getAgentName());
+                message(out, "Folds  : " + numFolds[i]);
+                message(out, "Calls  : " + numCalls[i]);
+                message(out, "Raises : " + numRaises[i]);
+                message(out, "Total : " + (numFolds[i]+numCalls[i] +numRaises[i]));
+                message(out, "Aggression : " + numRaises[i]/(double)numCalls[i]);
+                message(out, "Aggression2 : " + (numRaises[i]+numCalls[i])/(double)numFolds[i]);
+            }
+        }
         plot( xEpisode, yScore ); // a plot for score average
-        addLine( xEpisode, yTheta ); // a plot for theta average
+        //addLine( xEpisode, yTheta ); // a plot for theta average
     }
 
     private static double max(int[] array){
@@ -303,24 +369,9 @@ public class PLBadugiRunner {
     public static void badugiTournament(String[] agentClassNames, PrintWriter out, PrintWriter results) {
         
         // Create the list of player agents.
-        List<PLBadugiPlayer> players = new ArrayList<PLBadugiPlayer>(agentClassNames.length);
-        for(String agent: agentClassNames) {
-            Class c = null;
-            try { 
-                c = Class.forName(agent);
-            } catch(Exception e) {
-                System.out.println("Unable to load class bytecode for [" + agent + "]. Exiting.");
-                return;
-            }
-            PLBadugiPlayer bp = null;
-            try {
-                bp = (PLBadugiPlayer)(c.newInstance());
-            } catch(Exception e) {
-                System.out.println("Unable to instantiate class [" + agent + "]. Exiting.");
-                return;
-            }
-            players.add(bp);
-        }
+        List<PLBadugiPlayer> players = createPlayers(agentClassNames);
+
+        if (players == null) return;
         int[] scores = new int[players.size()];
         Random rng;
         String seed = "This string is to be used as seed of secure random number generator " + System.currentTimeMillis();
@@ -328,26 +379,38 @@ public class PLBadugiRunner {
         catch(Exception e) { 
             message(out, "Unable to create secure RNG: " + e);
             message(out, "Using system Random class instead.");
+
             rng = new Random();
         }
         // One and the same deck object is reused through the entire tournament.
         EfficientDeck deck = new EfficientDeck(rng);
-        
+
+        PrintWriter err = new PrintWriter(System.out);
+
         // Play and score the individual heads-up matches.
         for(int i = 0; i < players.size(); i++) {
             for(int j = i+1; j < players.size(); j++) {
+
                 if(!SAME_TYPE_PLAY && agentClassNames[i].equals(agentClassNames[j])) { continue; }
-                PLBadugiPlayer[] playersArr = { players.get(i), players.get(j) } ;
-                int result = playHeadsUp(deck, playersArr, null, HANDS_PER_MATCH);
-                out.print("["+players.get(i).getAgentName() + "] vs. [" + players.get(j).getAgentName() + "]: ");
+
+                PLBadugiPlayer[] playersArr = { players.get(i), players.get(j) };
+
+                int result = playHeadsUp(deck, playersArr, null, err, HANDS_PER_MATCH);
+
                 if(result < 0) { scores[j] += 2; }
                 else if(result > 0) { scores[i] += 2; }
                 else { scores[j]++; scores[i]++; }
+
+                out.print("["+players.get(i).getAgentName() + "] vs. [" + players.get(j).getAgentName() + "]: ");
                 out.println(result);
                 out.flush();
             }
         }
-        
+
+        updateScores(results, players, scores);
+    }
+
+    private static void updateScores(PrintWriter results, List<PLBadugiPlayer> players, int[] scores) {
         for(int i = 0; i < players.size(); i++) {
             int max = 0;
             for(int j = 1; j < players.size(); j++) {
@@ -357,13 +420,13 @@ public class PLBadugiRunner {
             results.println((i+1) + " : " + name + " : " + scores[max]);
             scores[max] = -scores[max];
         }
-        
+
         for(int i = 0; i < players.size(); i++) {
             scores[i] = -scores[i];
         }
-        
+
         results.println("\n\n");
-        
+
         for(int i = 0; i < players.size(); i++) {
             int max = 0;
             for(int j = 1; j < players.size(); j++) {
@@ -374,7 +437,29 @@ public class PLBadugiRunner {
             scores[max] = -scores[max];
         }
     }
-    
+
+    private static List<PLBadugiPlayer> createPlayers(String[] agentClassNames) {
+        List<PLBadugiPlayer> players = new ArrayList<PLBadugiPlayer>(agentClassNames.length);
+        for(String agent: agentClassNames) {
+            Class c = null;
+            try {
+                c = Class.forName(agent);
+            } catch(Exception e) {
+                System.out.println("Unable to load class bytecode for [" + agent + "]. Exiting.");
+                return null;
+            }
+            PLBadugiPlayer bp = null;
+            try {
+                bp = (PLBadugiPlayer)(c.newInstance());
+            } catch(Exception e) {
+                System.out.println("Unable to instantiate class [" + agent + "]. Exiting.");
+                return null;
+            }
+            players.add(bp);
+        }
+        return players;
+    }
+
     /**
      * Play three hands in the verbose mode. Suitable for watching your agents play.
      */
@@ -394,7 +479,11 @@ public class PLBadugiRunner {
             rng = new Random();
         }
         EfficientDeck deck = new EfficientDeck(rng);
-        int result = playHeadsUp(deck, players, new PrintWriter(System.out), 3);
+
+        PrintWriter out = new PrintWriter(System.out);
+        PrintWriter err = new PrintWriter(System.out);
+
+        int result = playHeadsUp(deck, players, out, err, 3);
         System.out.println("\n\nMatch result is " + result + ".");
     }
     
@@ -404,6 +493,7 @@ public class PLBadugiRunner {
     public static void main2(String[] args) throws IOException {
         playThreeHandTournament();
     }
+
     public static void main(String[] args) throws IOException {
 
         // playThreeHandTournament();
@@ -419,7 +509,8 @@ public class PLBadugiRunner {
         PrintWriter out = new PrintWriter(System.out);
         PrintWriter result = new PrintWriter(new FileWriter("results.txt"));
 
-        for (int i = 0; i < 1; i++) {
+        final int Replay = 1;
+        for (int i = 0; i < Replay; i++) {
             badugiTournament(playerClasses, out, result);
         }
 
